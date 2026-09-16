@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring AI 学习实验室</title>
+    <style>
+        body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 900px; margin: 32px auto; padding: 0 20px; color: #222; line-height: 1.7; }
+        h1 { border-bottom: 3px solid #6db33f; padding-bottom: 10px; }
+        h2 { color: #1b5e20; margin-top: 34px; }
+        .card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px 20px; margin: 14px 0; background: #fafafa; }
+        .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: #0d47a1; }
+        .desc { color: #444; margin-top: 6px; }
+        pre { background: #263238; color: #e3f2fd; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .badge { display: inline-block; background: #e8f5e9; color: #1b5e20; border-radius: 20px; padding: 2px 10px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🌱 Spring AI 学习实验室</h1>
+    <p>由浅入深的 7 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
+    每个入口的源代码都配有中文注释，并标注了对应 LangChain 概念。</p>
+
+    <div class="card">
+        <div class="path">GET /lesson1?q=你的问题</div>
+        <div class="badge">第 1 课</div>
+        <div class="desc">最简调用 —— ChatClient 入门。</div>
+        <pre>curl "localhost:8080/lesson1?q=用一句话介绍你自己"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson2/translate?text=hello</div>
+        <div class="path">GET /lesson2/structured?text=Spring%20AI%20rocks</div>
+        <div class="badge">第 2 课</div>
+        <div class="desc">提示词工程 —— PromptTemplate / few-shot / 结构化输出(.entity)。</div>
+        <pre>curl "localhost:8080/lesson2/structured?text=Spring%20AI%20rocks"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson3/stream?topic=Java</div>
+        <div class="badge">第 3 课</div>
+        <div class="desc">流式输出 —— 用 -N 观察 token 逐字返回（SSE）。</div>
+        <pre>curl -N "localhost:8080/lesson3/stream?topic=Reactive"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">POST /lesson4/chat/{sessionId}</div>
+        <div class="badge">第 4 课</div>
+        <div class="desc">会话记忆 —— 同一 sessionId 多轮能记住上文。</div>
+        <pre>curl -X POST "localhost:8080/lesson4/chat/abc" -d "我的名字叫小明"
+curl -X POST "localhost:8080/lesson4/chat/abc" -d "我叫什么名字？"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson5?q=你的问题</div>
+        <div class="badge">第 5 课</div>
+        <div class="desc">函数调用 —— 让模型调用你的 @Tool 方法（天气/计算器/时间）。</div>
+        <pre>curl "localhost:8080/lesson5?q=北京今天天气如何"
+curl "localhost:8080/lesson5?q=帮我算一下 (12+8)*4 等于几"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson6/ingest</div>
+        <div class="path">GET /lesson6/ask?q=你的问题</div>
+        <div class="badge">第 6 课</div>
+        <div class="desc">RAG —— 先灌入知识库，再基于本地资料回答（先 ingest 后 ask）。</div>
+        <pre>curl "localhost:8080/lesson6/ingest"
+curl "localhost:8080/lesson6/ask?q=Spring AI 的创始人是谁"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson7?prompt=描述词</div>
+        <div class="badge">第 7 课</div>
+        <div class="desc">图像生成 —— 返回生成图的 URL。</div>
+        <pre>curl "localhost:8080/lesson7?prompt=一只戴帽子的橘猫，水彩画风"</pre>
+    </div>
+
+    <p style="color:#888; margin-top:30px;">想一个人都不设 key 检验构建：在工程目录 <code>mvn test</code> 即可（单元测试不联网）。</p>
+</body>
+</html>

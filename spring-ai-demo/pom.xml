@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Spring AI 2.0.0 是基于 Spring Boot 4.1 构建的，所以父工程必须是 spring-boot-starter-parent 4.1.x，
+      而不是更老的 3.x。如果你用 Boot 3.5 + Spring AI 1.x，父版本需要改成 3.5.x。
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.example</groupId>
+    <artifactId>spring-ai-demo</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>spring-ai-demo</name>
+    <description>Spring AI (Java) 循序渐进的 LLM 应用学习示例工程</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <spring-ai.version>2.0.0</spring-ai.version>
+
+        <!--
+          源码与资源一律按 UTF-8 处理，否则源码里的中文注释、以及
+          application.properties / 提示词里的中文会变成乱码。
+          spring-boot-starter-parent 虽然已默认设为 UTF-8，但这里显式声明，
+          既是为了自文档化，也防止将来更换父工程后失效。
+        -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+              Spring AI 用 BOM 统一管理版本，避免每个 starter 手写版本号。
+              这个 BOM 会决定所有 org.springframework.ai:* 的版本。
+            -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- OpenAI 聊天模型 starter：自动配置 OpenAiChatModel、EmbeddingModel、ImageModel 等 Bean，
+             也自动提供 ChatClient.Builder。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+
+        <!-- Web：提供 REST 端点、SSE 流式能力，也是 ChatClient.Builder 自动装配的前提之一 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- 内存向量库 SimpleVectorStore，用于 RAG（lesson06）demo。
+             SimpleVectorStore 位于 org.springframework.ai:spring-ai-vector-store。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-vector-store</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- Spring AI 的部分构件发布在 Spring 的专用仓库里（当前 2.0.0 已在 Maven Central，此处保留以防未来里程碑版本用） -->
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+</project>

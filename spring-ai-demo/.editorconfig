@@ -1,0 +1,25 @@
+# 统一全工程的编码与换行符，避免中文注释在不同编辑器里变成乱码（如 "å¦ä¹ "）。
+# IntelliJ IDEA / VS Code / Eclipse 都原生支持 .editorconfig，改这里即可全局生效。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# 本工程配置已改用 application.yml（YAML 规范强制 UTF-8），不再有 .properties。
+# 这条保留作为兜底：万一以后新增 .properties，也不至于踩 ISO-8859-1 默认编码的坑。
+[*.properties]
+charset = utf-8
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.xml]
+indent_size = 4

@@ -1,0 +1,49 @@
+# ============================================================
+# Spring AI 学习示例 —— 配置说明
+# 所有 API Key / 模型等开关都在这里集中，方便对照官方文档调参。
+#
+# 为什么用 .yml 而不是 .properties？
+#   Java 的 .properties 规范默认编码是 ISO-8859-1，IntelliJ 也沿用这个默认值，
+#   于是 UTF-8 的中文注释会被显示成 "å¦ä¹ " 这类乱码。
+#   YAML 规范强制 UTF-8，编辑器（含 IntelliJ）默认就按 UTF-8 处理，
+#   中文注释不会乱码，因此本项目采用 .yml。
+# ============================================================
+
+server:
+  # 绑定在 8080，浏览器打开 http://localhost:8080/ 可看所有 demo 入口
+  port: 8080
+
+spring:
+  ai:
+    # ---- OpenAI 认证 ----
+    # 推荐用环境变量传入，避免把 key 提交到仓库：
+    #   export OPENAI_API_KEY=sk-xxx
+    openai:
+      api-key: "${OPENAI_API_KEY:}"
+
+      # ---- 聊天模型 ----
+      chat:
+        # gpt-4o 是最常用、性价比最高的多模态模型
+        model: gpt-4o
+        # 温度：越低越稳定专注（结构化输出常设为 0），越高越发散
+        temperature: 0.7
+
+      # ---- 向量化模型（用于 lesson06 RAG）----
+      embedding:
+        # text-embedding-3-small 便宜且够用；追求更高质量可换 large
+        model: text-embedding-3-small
+
+      # ---- 图像生成（lesson07）----
+      image:
+        model: gpt-image-1
+
+    # 指定启用哪家模型（缺省即 openai）
+    model:
+      chat: openai
+      embedding: openai
+      image: openai
+
+# ---- 日志：把每次实际发给模型的 prompt 打出来，方便学习 SDK 内部结构 ----
+logging:
+  level:
+    org.springframework.ai: DEBUG
