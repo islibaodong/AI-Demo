@@ -51,7 +51,7 @@ mvn spring-boot:run
 启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 7 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 4 个单元测试全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块），**不需要 Key**。
+- `mvn test` —— 5 个单元测试全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
@@ -141,7 +141,7 @@ spring-ai-demo/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 4 个离线单元测试
+    └── test/java/com/example/demo/           # 5 个离线单元测试
 ```
 
 ---
