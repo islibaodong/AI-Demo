@@ -50,7 +50,9 @@ public class Lesson06Controller {
     public String ingest() throws java.io.IOException {
         List<Document> docs = ragConfig.loadKnowledgeDocuments();
         vectorStore.add(docs);                       // 逐段向量化并写入向量库
-        return "已灌入 " + docs.size() + " 段文档到向量库。";
+        // lesson09：灌完顺手落盘到 data/vector-store.json，重启后不用重新灌
+        ragConfig.saveVectorStore(vectorStore);
+        return "已灌入 " + docs.size() + " 段文档到向量库，并已持久化到 data/vector-store.json。";
     }
 
     /**

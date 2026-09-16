@@ -14,3 +14,5 @@ application-secret.yml
 
 # 系统文件
 .DS_Store
+# lesson09 持久化产生的本地数据（H2 数据库 / 向量库文件）
+data/

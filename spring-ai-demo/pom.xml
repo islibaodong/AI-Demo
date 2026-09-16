@@ -25,6 +25,11 @@
         <java.version>21</java.version>
         <spring-ai.version>2.0.0</spring-ai.version>
 
+        <!-- 覆盖 Boot 4.1 默认的 h2 2.4.240：该版本存在 CHECK 约束跨会话求值失败的 bug
+             （H2 issue #4302，建表连接关闭后新会话插入必报 23514 "Check constraint invalid"），
+             2.5.250 已修复。升级 Spring Boot 后若其管理的 H2 >= 2.5.250，此覆盖可删除。 -->
+        <h2.version>2.5.250</h2.version>
+
         <!--
           源码与资源一律按 UTF-8 处理，否则源码里的中文注释、以及
           application.properties / 提示词里的中文会变成乱码。
@@ -65,11 +70,42 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- 内存向量库 SimpleVectorStore，用于 RAG（lesson06）demo。
+        <!-- 内存向量库 SimpleVectorStore，用于 RAG（lesson06/08）demo。
              SimpleVectorStore 位于 org.springframework.ai:spring-ai-vector-store。 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-vector-store</artifactId>
+        </dependency>
+
+        <!-- 现成的向量库 Advisor：QuestionAnswerAdvisor（lesson08）。
+             注意 1.x 时代这个 artifact 叫 spring-ai-advisors-vector-store，2.0 改名为
+             spring-ai-vector-store-advisor；若引用旧名会报 "version is missing"
+             （它已不在 2.0 BOM 里）。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-vector-store-advisor</artifactId>
+        </dependency>
+
+        <!-- 会话记忆的 JDBC 持久化（lesson09）：JdbcChatMemoryRepository + 自动建表。
+             数据库由 spring.datasource 决定，本工程配的是 H2 文件库，无需任何外部服务。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
+        </dependency>
+
+        <!-- H2：既做运行时的持久化文件库，也是测试里的内存库 -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- MCP 客户端（lesson10）：把外部 MCP 服务器暴露的工具接入 ChatClient。
+             内含 io.modelcontextprotocol.sdk:mcp（MCP 官方 Java SDK），
+             支持 stdio（拉起子进程）与 SSE（HTTP）两种传输。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
         </dependency>
 
         <dependency>

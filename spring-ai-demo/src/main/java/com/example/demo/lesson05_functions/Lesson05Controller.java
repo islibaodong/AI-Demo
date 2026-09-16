@@ -1,6 +1,7 @@
 package com.example.demo.lesson05_functions;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,8 +26,11 @@ public class Lesson05Controller {
 
     private final ChatClient chatClient;
 
-    public Lesson05Controller(ChatClient.Builder builder, AppTools appTools) {
-        this.chatClient = builder
+    public Lesson05Controller(ChatModel chatModel, AppTools appTools) {
+        // 自动配置的 ChatClient.Builder 是 prototype 作用域——每个注入点拿到的都是全新 Builder，
+        // 所以本课直接注入它没有问题。但要注意：对同一个 Builder 连续 defaultTools/defaultAdvisors
+        // 是「叠加」而非替换（源码是 List.addAll），复用同一个 Builder 变量构建多个客户端时会互相串。
+        this.chatClient = ChatClient.builder(chatModel)
                 // 把工具对象传入，其上的 @Tool 方法即可被模型调用
                 .defaultTools(appTools)
                 .build();

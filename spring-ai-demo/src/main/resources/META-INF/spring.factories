@@ -1,0 +1,4 @@
+# Boot 4 起接口在 org.springframework.boot 包（旧 org.springframework.boot.env 包已废弃）
+# 注意：key 写错包名不会报错，只会被静默忽略——.env 不生效时先查这里
+org.springframework.boot.EnvironmentPostProcessor=\
+  com.example.demo.config.DotEnvEnvironmentPostProcessor

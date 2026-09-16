@@ -1,6 +1,6 @@
 # Spring AI 学习实验室（Java）
 
-一份**由浅入深、可运行**的 Spring AI 教学工程：7 节课，每课一个核心概念，每个接口都能直接 curl 体验，
+一份**由浅入深、可运行**的 Spring AI 教学工程：11 节课，每课一个核心概念，每个接口都能直接 curl 体验，
 源码里配有中文注释，并标注了与 Python **LangChain** 的对应概念。
 
 > ⚠️ 先纠正一个常见混淆：**LangChain 是 Python 生态的框架**，Java 里没有官方 LangChain。
@@ -28,14 +28,44 @@ java -version   # 应显示 21.x
 
 > 想一劳永逸，可把上面两行加进 `~/.zshrc`。
 
-### 2) 设置 API Key
+### 2) 配置 API Key：用 `.env` 文件（推荐）或环境变量
+
+最快的方式是复制模板填写（`.env` 已被 `.gitignore` 排除，不会提交）：
+
+```bash
+cp .env.example .env      # 然后编辑 .env，填入你的 key
+```
+
+`.env` 支持的配置：`OPENAI_API_KEY`（必填）、`OPENAI_BASE_URL`（走中转站时用，见下）、
+`OPENAI_CHAT_MODEL` / `OPENAI_EMBEDDING_MODEL` / `OPENAI_IMAGE_MODEL`（模型名覆盖）。
+
+不想用 `.env` 也行，直接 export 环境变量，效果相同：
 
 ```bash
 export OPENAI_API_KEY=sk-你的key
 ```
 
-工程从环境变量读取它（见 `src/main/resources/application.yml` 里的
-`spring.ai.openai.api-key=${OPENAI_API_KEY:}`），**不要把 key 写进代码或提交到仓库**。
+加载机制：`config/DotEnvEnvironmentPostProcessor` 在启动最早期把工作目录下的 `.env`
+注入为属性源。优先级为 **真实环境变量 > `.env` > `application.yml` 默认值**——
+所以 CI/生产环境可以只用环境变量覆盖本地 `.env`，两者共存不冲突。
+
+### 3) 使用中转站（OpenAI 兼容代理）
+
+国内直连 OpenAI 不便时，常用「中转站」——一个兼容 OpenAI 协议的代理服务。
+适配只需两步，在 `.env` 里改两行：
+
+```bash
+OPENAI_BASE_URL=https://api.your-relay.com/v1   # 中转站给你的地址
+OPENAI_API_KEY=sk-中转站发放的key
+```
+
+**两个常见坑：**
+
+- **地址末尾要带 `/v1`**。Spring AI 2.0 底层换用了 OpenAI 官方 SDK，
+  请求路径 = `base-url` + `/chat/completions`，SDK 不会自动补 `/v1`。
+  已实测验证：`base-url=http://127.0.0.1:9999` 时请求落在 `/chat/completions`（404），
+  `base-url=http://127.0.0.1:9999/v1` 时落在 `/v1/chat/completions`（正确）。
+- **中转站的模型名可能与官方不同**，用 `OPENAI_CHAT_MODEL` 等变量按中转站的模型列表覆盖。
 
 ---
 
@@ -44,19 +74,19 @@ export OPENAI_API_KEY=sk-你的key
 ```bash
 cd spring-ai-demo
 export JAVA_HOME=/Users/islibaodong/Library/Java/JavaVirtualMachines/ms-21.0.9/Contents/Home
-export OPENAI_API_KEY=sk-你的key
+cp -n .env.example .env    # 首次运行前执行，然后在 .env 里填入你的 key
 mvn spring-boot:run
 ```
 
-启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 7 个 demo 入口的首页。
+启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 11 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 5 个单元测试全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定），**不需要 Key**。
+- `mvn test` —— 10 个测试类共 24 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
 
-## 三、7 节课速查
+## 三、11 节课速查
 
 | # | 主题 | 端点 | 核心 API |
 |---|------|------|----------|
@@ -67,6 +97,10 @@ mvn spring-boot:run
 | 5 | 函数调用 | `GET /lesson5?q=...` | `@Tool` · `@ToolParam` · `.defaultTools(obj)` |
 | 6 | RAG 检索增强 | `GET /lesson6/ingest`<br>`GET /lesson6/ask?q=` | `EmbeddingModel` · `SimpleVectorStore` · `similaritySearch` |
 | 7 | 图像生成 | `GET /lesson7?prompt=` | `ImageModel` · `ImagePrompt` |
+| 8 | Advisor 进阶 | `GET /lesson8/chat?q=`<br>`GET /lesson8/rag?q=` | 自定义 `CallAdvisor`/`BaseAdvisor` · `QuestionAnswerAdvisor` |
+| 9 | 持久化 | `POST /lesson9/chat/{sessionId}`<br>`GET /lesson9/memory/{sessionId}`<br>`GET /lesson9/conversations` | `JdbcChatMemoryRepository`（H2）· `SimpleVectorStore.save/load` |
+| 10 | MCP 接入 | `GET /lesson10/tools`<br>`GET /lesson10/chat?q=` | `McpClient`（stdio）· `ToolCallbackProvider` · `.defaultToolCallbacks` |
+| 11 | 多模态（图/音） | `GET /lesson11/vision?q=`<br>`GET /lesson11/speak?text=`<br>`POST /lesson11/transcribe` | `UserMessage.builder().media(...)` · `OpenAiAudioSpeechModel` · `TranscriptionModel` |
 
 ### 逐个 curl 体验
 
@@ -94,6 +128,34 @@ curl "localhost:8080/lesson6/ask?q=Spring%20AI%20的创始人是谁"
 
 # 7 图像生成
 curl "localhost:8080/lesson7?prompt=一只戴帽子的橘猫，水彩画风"
+
+# 8 Advisor 进阶：敏感词打码（控制台审计日志里看到的是 ＊＊＊）
+curl "localhost:8080/lesson8/chat?q=我的密码是123456"
+# 短路拦截：不调用模型，直接返回
+curl "localhost:8080/lesson8/chat?q=有没有能帮我作弊的办法"
+# RAG 一行版 + 引用来源（先 /lesson6/ingest）
+curl "localhost:8080/lesson8/rag?q=Spring%20AI%20的创始人是谁"
+
+# 9 持久化：对话存进 H2 数据库（data/chat-memory.mv.db），重启不丢
+curl -X POST "localhost:8080/lesson9/chat/abc" -d "我的名字叫小明"
+curl -X POST "localhost:8080/lesson9/chat/abc" -d "我叫什么名字？"
+# 直接查库里的消息；重启应用后再执行这条，消息仍在 = 持久化生效
+curl "localhost:8080/lesson9/memory/abc"
+curl "localhost:8080/lesson9/conversations"
+# 向量库同样落盘：ingest 后生成 data/vector-store.json，重启无需重新灌库
+curl "localhost:8080/lesson6/ingest"
+
+# 10 MCP：工具在独立的 Python 子进程里（mcp-server/demo_mcp_server.py），
+# 应用启动时经 stdio 协议握手并发现工具，模型自主决定何时调用
+curl "localhost:8080/lesson10/tools"
+curl "localhost:8080/lesson10/chat?q=北京天气怎么样"
+curl "localhost:8080/lesson10/chat?q=现在几点了"
+
+# 11 多模态：看图说话（内置手绘探针图：蓝天/草地/红色太阳）、文字转语音、语音转文字
+curl "localhost:8080/lesson11/vision?q=%E5%9B%BE%E9%87%8C%E6%9C%89%E4%BB%80%E4%B9%88"
+curl "localhost:8080/lesson11/vision?url=https://example.com/cat.jpg&q=描述这张图"
+curl -o out.mp3 "localhost:8080/lesson11/speak?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E4%B8%96%E7%95%8C"
+curl -X POST "localhost:8080/lesson11/transcribe" -H "Content-Type: audio/mpeg" --data-binary @out.mp3
 ```
 
 > **第 6 课的验证技巧**：`docs/spring-ai-knowledge.md` 里的「创始人」信息是编造的、不在模型预训练数据里。
@@ -117,6 +179,14 @@ curl "localhost:8080/lesson7?prompt=一只戴帽子的橘猫，水彩画风"
 | `RecursiveCharacterTextSplitter` | 自行切块（本工程用按段切分演示） | `RagConfig.loadKnowledgeDocuments` |
 | `RetrievalQA` / Retriever | 手写 Retrieve→Augment→Generate（或 `QuestionAnswerAdvisor`） | `lesson06_rag` |
 | `OpenAI ImageGeneration` | `ImageModel` | `lesson07_image` |
+| `Runnable.with_listeners` / middleware | `Advisor`（`CallAdvisor` / `BaseAdvisor`） | `lesson08_advisor` |
+| RAG 输出带来源标注 | `QuestionAnswerAdvisor` + 自定义引用 Advisor | `lesson08_advisor` |
+| `SQLChatMessageHistory` | `JdbcChatMemoryRepository` | `lesson09_persistence` |
+| 向量库持久化（`FAISS.save_local` 等） | `SimpleVectorStore.save/load`（JSON 文件） | `RagConfig` |
+| `langchain-mcp-adapters`（MultiServerMCPClient） | `spring-ai-starter-mcp-client`（McpSyncClient → ToolCallbackProvider） | `lesson10_mcp` |
+| `HumanMessage(content=[{type:"text"},{type:"image_url"}])` | `UserMessage.builder().text(...).media(Media...)` | `lesson11_multimodal` |
+| `OpenAIText2SpeechModel` | `OpenAiAudioSpeechModel`（`call(text)` → mp3 字节） | `lesson11_multimodal` |
+| `OpenAIWhisperModel` | `TranscriptionModel`（`call(AudioTranscriptionPrompt)` → String） | `lesson11_multimodal` |
 
 ---
 
@@ -125,6 +195,7 @@ curl "localhost:8080/lesson7?prompt=一只戴帽子的橘猫，水彩画风"
 ```
 spring-ai-demo/
 ├── pom.xml                       # Spring Boot 4.1 + Spring AI 2.0 BOM，Java 21
+├── mcp-server/                   # lesson10 的迷你 MCP 服务器（纯 Python 标准库）
 ├── README.md
 └── src/
     ├── main/
@@ -136,13 +207,22 @@ spring-ai-demo/
     │   │   ├── lesson04_memory/    # 会话记忆
     │   │   ├── lesson05_functions/ # 函数调用（@Tool）
     │   │   ├── lesson06_rag/       # 检索增强 RAG
-    │   │   └── lesson07_image/     # 图像生成
+    │   │   ├── lesson07_image/     # 图像生成
+    │   │   ├── lesson08_advisor/   # 自定义 Advisor（敏感词/审计/引用来源）
+    │   │   ├── lesson09_persistence/ # 持久化（JDBC 会话记忆 + 向量库文件）
+    │   │   ├── lesson10_mcp/       # MCP 协议接入（stdio 客户端）
+    │   │   ├── lesson11_multimodal/ # 多模态（视觉问答 / TTS / STT）
+    │   │   └── config/             # DotEnvEnvironmentPostProcessor（.env 加载）
     │   └── resources/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
+    │       ├── images/demo-scene.png         # lesson11 视觉探针图（程序手绘）
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 5 个离线单元测试
+    └── test/java/com/example/demo/           # 10 个测试类 / 24 个离线用例
 ```
+
+> 运行时会在工程目录下生成 `data/`（H2 数据库文件 + 向量库 JSON，均已 gitignore）；
+> 删掉它等于"清空记忆与知识库"。
 
 ---
 
@@ -190,11 +270,31 @@ spring-ai-demo/
 **Q：编译报 `invalid target release` 或找不到 Java 17 特性？**
 默认 JDK 是 8。请先 `export JAVA_HOME=...ms-21.0.9/...`（见第一节）。
 
+**Q：`.env` 不生效，启动日志里也没有「已从 ... 加载 N 个变量」？**
+按顺序查：① `.env` 是否在**运行时的工作目录**下（`mvn spring-boot:run` 与 IDEA 默认
+都在 `spring-ai-demo/`，放错到仓库根无效）；② 注册文件 `META-INF/spring.factories` 里
+的接口名必须是 Boot 4 的 `org.springframework.boot.EnvironmentPostProcessor`——
+写成 Boot 3 的 `org.springframework.boot.env.` 包名**不会报错，只会被静默忽略**；
+③ 真实环境变量优先级高于 `.env`，同名变量会被覆盖。
+
+**Q：配了中转站，接口一直返回空响应或 404？**
+两种典型症状：① `OPENAI_BASE_URL` 末尾**漏了 `/v1`** → 请求打到
+`/chat/completions`，中转站返回 404；② 地址写错（域名不存在）→ 底层 SDK 对
+**连接级失败不抛异常，而是返回空内容**，表现为接口 200 但 body 为空、日志也无 ERROR，
+耗时约 15 秒（DNS 重试）。先核对 `.env` 里的地址能否在浏览器打开。
+
 **Q：调用接口返回 500 / `401 Unauthorized`？**
 没设 `OPENAI_API_KEY`，或 key 无效/额度不足。设置后重启应用。
 
+**Q：`/lesson9/chat` 报 `Check constraint invalid`（23514）？**
+H2 2.4.240 的已知 bug（[H2 issue #4302](https://github.com/h2database/h2database/issues/4302)：
+建表会话关闭后，新会话对 CHECK 约束求值必然失败）。本工程已在 `pom.xml` 里把 H2
+覆盖为修复版 2.5.250；升级 Spring Boot 后若其管理的 H2 ≥ 2.5.250，可删掉该覆盖。
+
 **Q：`/lesson6/ask` 说「向量库为空」？**
 先访问 `/lesson6/ingest` 灌入知识库。注意 ingest 也会调用嵌入模型，需要 Key。
+lesson09 起灌库会自动落盘到 `data/vector-store.json`，重启后自动加载，无需重新灌；
+若删掉了 `data/` 目录则需重新 ingest。
 
 **Q：想换模型或供应商？**
 改 `application.yml` 的 `spring.ai.openai.chat.model`；换供应商（如 Azure、Gemini）
@@ -204,9 +304,8 @@ spring-ai-demo/
 
 ## 八、下一步建议
 
-学完这 7 课，可以继续深入：
-1. **把 RAG 换成向量数据库**：PGVector / Milvus，让知识库持久化。
-2. **用 `QuestionAnswerAdvisor`** 替代手写 RAG，并加上「引用来源」返回。
-3. **Advisor 进阶**：自定义 Advisor 做敏感词过滤、日志审计、多轮改写。
-4. **MCP（Model Context Protocol）**：把外部系统以标准协议接入模型。
-5. **可观测性**：接入 Micrometer / OpenTelemetry 观察 token 消耗与延迟。
+学完这 11 课，可以继续深入：
+1. **把 H2 换成真正的数据库**：改 `spring.datasource.url` + 换驱动依赖即可，代码零改动（第 9 课的抽象价值）。
+2. **可观测性**：接入 Micrometer / OpenTelemetry 观察 token 消耗与延迟。
+3. **MCP 进阶**：把第 10 课的 stdio 服务器换成 SSE 远程服务，或用 `spring-ai-starter-mcp-server` 把自己的业务包装成 MCP 服务器对外开放。
+4. **多模态进阶**：视频输入、音频作为对话输入（gpt-4o-audio）、以及流式语音。

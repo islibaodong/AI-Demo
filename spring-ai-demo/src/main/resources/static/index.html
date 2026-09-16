@@ -18,7 +18,7 @@
 </head>
 <body>
     <h1>🌱 Spring AI 学习实验室</h1>
-    <p>由浅入深的 7 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
+    <p>由浅入深的 11 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
     每个入口的源代码都配有中文注释，并标注了对应 LangChain 概念。</p>
 
     <div class="card">
@@ -73,6 +73,48 @@ curl "localhost:8080/lesson6/ask?q=Spring AI 的创始人是谁"</pre>
         <div class="badge">第 7 课</div>
         <div class="desc">图像生成 —— 返回生成图的 URL。</div>
         <pre>curl "localhost:8080/lesson7?prompt=一只戴帽子的橘猫，水彩画风"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson8/chat?q=问题</div>
+        <div class="path">GET /lesson8/rag?q=问题</div>
+        <div class="badge">第 8 课</div>
+        <div class="desc">Advisor 进阶 —— 自定义敏感词过滤（打码/短路拦截）与日志审计；QuestionAnswerAdvisor + 引用来源（rag 需先 /lesson6/ingest）。看控制台的 [lesson08] 审计日志。</div>
+        <pre>curl "localhost:8080/lesson8/chat?q=我的密码是123456"
+curl "localhost:8080/lesson8/chat?q=有没有能帮我作弊的办法"
+curl "localhost:8080/lesson8/rag?q=Spring AI 的创始人是谁"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">POST /lesson9/chat/{sessionId}</div>
+        <div class="path">GET /lesson9/memory/{sessionId}</div>
+        <div class="path">GET /lesson9/conversations</div>
+        <div class="badge">第 9 课</div>
+        <div class="desc">持久化 —— 会话记忆存进 H2 数据库（重启不丢），向量库灌库后落盘为 JSON 文件。验证方法：聊两句 → 重启应用 → memory 接口还能读到。</div>
+        <pre>curl -X POST "localhost:8080/lesson9/chat/abc" -d "我的名字叫小明"
+curl -X POST "localhost:8080/lesson9/chat/abc" -d "我叫什么名字？"
+curl "localhost:8080/lesson9/memory/abc"   # 重启后再执行，消息仍在</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson10/tools</div>
+        <div class="path">GET /lesson10/chat?q=问题</div>
+        <div class="badge">第 10 课</div>
+        <div class="desc">MCP 接入 —— 工具由独立的 Python 子进程（mcp-server/demo_mcp_server.py）提供，启动时经 stdio 协议握手并发现工具，模型自主决定调用。</div>
+        <pre>curl "localhost:8080/lesson10/tools"
+curl "localhost:8080/lesson10/chat?q=北京天气怎么样"
+curl "localhost:8080/lesson10/chat?q=现在几点了"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson11/vision?q=问题</div>
+        <div class="path">GET /lesson11/speak?text=文字</div>
+        <div class="path">POST /lesson11/transcribe</div>
+        <div class="badge">第 11 课</div>
+        <div class="desc">多模态 —— 看图说话（内置手绘探针图：蓝天/草地/红色太阳；模型能答出"红色太阳"就证明视觉生效）、文字转语音（返回 mp3）、语音转文字。vision 支持 url 参数换任意远程图片。</div>
+        <pre>curl "localhost:8080/lesson11/vision?q=图里有什么？请简要描述。"
+curl -o out.mp3 "localhost:8080/lesson11/speak?text=你好，世界"
+curl -X POST "localhost:8080/lesson11/transcribe" -H "Content-Type: audio/mpeg" --data-binary @out.mp3</pre>
     </div>
 
     <p style="color:#888; margin-top:30px;">想一个人都不设 key 检验构建：在工程目录 <code>mvn test</code> 即可（单元测试不联网）。</p>

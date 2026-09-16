@@ -2,6 +2,8 @@ package com.example.demo.lesson06_rag;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,11 +40,35 @@ import org.springframework.util.StringUtils;
 public class RagConfig {
 
     /**
-     * 内存向量库 Bean。只要项目用了它，框架才会真正初始化向量功能。
+     * 向量库文件的落盘位置：工程目录下 <code>data/vector-store.json</code>（已 gitignore）。
+     * SimpleVectorStore 的 save/load 就是普通 JSON 文件——重启后无需重新调 Embedding API 灌库。
+     */
+    static final Path VECTOR_STORE_FILE = Path.of("data", "vector-store.json");
+
+    /**
+     * 内存向量库 Bean（lesson09 起带文件持久化）：
+     * 启动时若存在上次灌库落盘的 JSON 文件就直接加载，否则从空库开始。
      */
     @Bean
     public VectorStore vectorStore(EmbeddingModel embeddingModel) {
-        return SimpleVectorStore.builder(embeddingModel).build();
+        SimpleVectorStore store = SimpleVectorStore.builder(embeddingModel).build();
+        if (Files.exists(VECTOR_STORE_FILE)) {
+            store.load(VECTOR_STORE_FILE.toFile());   // load/save 均不抛受检异常
+        }
+        return store;
+    }
+
+    /**
+     * 把当前向量库写到磁盘。第 6 课的 ingest 端点在灌库后调用它，
+     * 这样重启应用后向量库内容还在（不用再花一遍 Embedding 调用的钱）。
+     */
+    public void saveVectorStore(VectorStore vectorStore) {
+        try {
+            Files.createDirectories(VECTOR_STORE_FILE.getParent());
+            ((SimpleVectorStore) vectorStore).save(VECTOR_STORE_FILE.toFile());
+        } catch (IOException e) {
+            // 持久化失败不影响本次运行，下次 ingest 会再写
+        }
     }
 
     /**

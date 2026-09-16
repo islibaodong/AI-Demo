@@ -14,28 +14,76 @@ server:
   port: 8080
 
 spring:
+  datasource:
+    # ---- lesson09 持久化：H2 文件库（零外部依赖的"数据库"）----
+    # 数据落在 ./data/chat-memory.mv.db，应用重启后会话记忆仍在。
+    # 想换成真正的数据库（PostgreSQL/MySQL）时，只需改 url/driver + 换对应驱动依赖，
+    # 上层代码（JdbcChatMemoryRepository）一行不用动 —— 这就是抽象层的价值。
+    url: "jdbc:h2:file:./data/chat-memory;AUTO_SERVER=TRUE"
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
   ai:
-    # ---- OpenAI 认证 ----
-    # 推荐用环境变量传入，避免把 key 提交到仓库：
-    #   export OPENAI_API_KEY=sk-xxx
+    # ---- 会话记忆 JDBC 持久化（lesson09）----
+    # 应用启动时自动执行建表脚本（jar 内置 schema-h2.sql，按数据库方言自动选择），
+    # 表名 SPRING_AI_CHAT_MEMORY。H2 文件库不算"内嵌库"，需显式 ALWAYS。
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always
+
+    # ---- MCP 客户端（lesson10）----
+    # 通过 stdio 传输拉起一个本地 MCP 服务器子进程：框架自动完成 initialize 握手、
+    # tools/list 发现工具，并把工具注册成 ToolCallbackProvider（toolcallback.enabled 默认 true）。
+    # 服务器是我们手写的 mcp-server/demo_mcp_server.py（纯 Python 标准库）。
+    # 注意：路径相对于工作目录（mvn spring-boot:run 的默认工作目录是本工程根）。
+    mcp:
+      client:
+        name: spring-ai-demo-client
+        version: 1.0.0
+        request-timeout: 30s
+        stdio:
+          connections:
+            demo-server:
+              command: python3
+              args:
+                - mcp-server/demo_mcp_server.py
+    # ---- OpenAI 连接 ----
+    # 三个来源（优先级：真实环境变量 > .env 文件 > 这里的默认值）：
+    #   OPENAI_API_KEY           密钥
+    #   OPENAI_BASE_URL          API 地址。OpenAI 官方留空即可；用中转站时改成中转站地址
+    #   OPENAI_CHAT_MODEL 等     模型名。中转站的模型名可能与官方不同，按需覆盖
+    # .env 的加载由 DotEnvEnvironmentPostProcessor 完成（见 config 包），可复制 .env.example 快速开始。
     openai:
+      # 注意：请求路径 = base-url + /chat/completions（SDK 不再自动补 /v1），
+      # 所以官方直连时 base-url 必须带 /v1（这也是官方 SDK 的内置默认值）
+      base-url: "${OPENAI_BASE_URL:https://api.openai.com/v1}"
       api-key: "${OPENAI_API_KEY:}"
 
       # ---- 聊天模型 ----
       chat:
         # gpt-4o 是最常用、性价比最高的多模态模型
-        model: gpt-4o
+        model: "${OPENAI_CHAT_MODEL:gpt-4o}"
         # 温度：越低越稳定专注（结构化输出常设为 0），越高越发散
         temperature: 0.7
 
       # ---- 向量化模型（用于 lesson06 RAG）----
       embedding:
         # text-embedding-3-small 便宜且够用；追求更高质量可换 large
-        model: text-embedding-3-small
+        model: "${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}"
 
       # ---- 图像生成（lesson07）----
       image:
-        model: gpt-image-1
+        model: "${OPENAI_IMAGE_MODEL:gpt-image-1}"
+
+      # ---- 语音（lesson11）：TTS 文字转语音 / STT 语音转文字（Whisper）----
+      audio:
+        speech:
+          model: "${OPENAI_TTS_MODEL:gpt-4o-mini-tts}"
+          voice: alloy
+        transcription:
+          model: "${OPENAI_STT_MODEL:whisper-1}"
 
     # 指定启用哪家模型（缺省即 openai）
     model:
