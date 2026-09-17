@@ -18,7 +18,7 @@
 </head>
 <body>
     <h1>🌱 Spring AI 学习实验室</h1>
-    <p>由浅入深的 19 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
+    <p>由浅入深的 22 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
     每个入口的源代码都配有中文注释，并标注了对应 LangChain 概念。</p>
 
     <div class="card">
@@ -217,6 +217,44 @@ curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
 curl -N "localhost:8080/lesson19/support/stream?q=%E9%80%80%E6%AC%BE%E5%A4%9A%E4%B9%85%E5%88%B0%E8%B4%A6"  # SSE
 curl "localhost:8080/lesson19/summary?session=s1"   # 工单 JSON
 curl "localhost:8080/lesson19/evals"                # 4/4 回归</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson20/users</div>
+        <div class="path">GET /lesson20/agent?user=carol&q=查一下订单A1003</div>
+        <div class="path">GET /lesson20/knowledge?q=差旅住宿标准&user=carol</div>
+        <div class="path">GET /lesson20/prompt-only?user=carol&q=...（反面教材）</div>
+        <div class="badge">第 20 课</div>
+        <div class="desc">多用户权限与数据权限（企业实战）—— 身份经 .toolContext 旁路传递（不进提示词）；工具级 RBAC（员工不能取消订单/拉报表）+ 行级数据权限（bob 查不到 carol 的订单）；RAG 的权限过滤在检索层做（机密文档根本不进候选集），prompt-only 端点是"靠提示词保密"的反面教材。同一句话换不同 user 参数，看权限差异。</div>
+        <pre>curl "localhost:8080/lesson20/agent?user=carol&q=%E6%9F%A5%E4%B8%80%E4%B8%8B%E8%AE%A2%E5%8D%95A1003"   # 行级拒绝
+curl "localhost:8080/lesson20/agent?user=alice&q=%E6%9F%A5%E4%B8%80%E4%B8%8B%E8%AE%A2%E5%8D%95A1003"   # 管理员可见
+curl "localhost:8080/lesson20/agent?user=carol&q=%E5%B8%AE%E6%88%91%E5%8F%96%E6%B6%88%E8%AE%A2%E5%8D%95A1001"  # RBAC 拒绝
+curl "localhost:8080/lesson20/knowledge?q=%E9%AB%98%E7%AE%A1%E5%B7%AE%E6%97%85&user=carol"    # 机密被过滤</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson21/loop?topic=机械键盘促销</div>
+        <div class="path">GET /lesson21/graph/run?q=订单A1001要退款</div>
+        <div class="path">POST /lesson21/graph/approve/{executionId}?approved=true&comment=...</div>
+        <div class="path">GET /lesson21/graph/pending</div>
+        <div class="badge">第 21 课</div>
+        <div class="desc">工作流编排：loop / graph / 人在环中（企业实战）—— 手写 mini 状态图（LangGraph 对照：节点/条件边/中断恢复）。loop 端点是写文案→打分→改写的显式迭代循环（轮数上限+引擎步数双保险，对照 lesson16 的黑盒循环）；graph 端点退款申请会在审批节点挂起（返回 executionId），用 approve 接口人工批准/拒绝后从挂起节点重入走对应分支——硬管控，对照 lesson16 的"拦截改道"软治理。审批工作流全程不调模型，离线可复现。</div>
+        <pre>curl "localhost:8080/lesson21/loop?topic=%E6%9C%BA%E6%A2%B0%E9%94%AE%E7%9B%98%E4%BF%83%E9%94%80"   # trace 能看到循环
+curl "localhost:8080/lesson21/graph/run?q=%E8%AE%A2%E5%8D%95A1001%E8%A6%81%E9%80%80%E6%AC%BE"        # suspended + executionId
+curl -X POST "localhost:8080/lesson21/graph/approve/xxx?approved=false&comment=%E4%B8%8D%E7%AC%A6%E5%90%88%E6%94%BF%E7%AD%96"
+curl "localhost:8080/lesson21/graph/pending"</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson22/agent?user=bob&q=帮我的报销单EX5002发起付款</div>
+        <div class="path">POST /lesson22/approve/{executionId}?approved=true</div>
+        <div class="path">GET /lesson22/evals</div>
+        <div class="badge">第 22 课</div>
+        <div class="desc">企业级 Agent 开发（整合课）—— 一条链路串起治理域：身份解析（20）→ 权限过滤检索（20）→ 治理 Agent（审计+RBAC+行级，requestPayment 经 hooks 通道"举手"而非直接付款）→ 审批门挂起/人工批准后执行付款（21）→ tokens 与成本（14）→ 权限探针回归（18）。evals 是 4 条纯 Java 探针（行级拒绝/RBAC 拒绝/机密不可见/冒烟），不调模型、确定性回归。</div>
+        <pre>curl "localhost:8080/lesson22/agent?user=bob&q=%E5%B8%AE%E6%88%91%E7%9A%84%E6%8A%A5%E9%94%80%E5%8D%95EX5002%E5%8F%91%E8%B5%B7%E4%BB%98%E6%AC%BE"   # 挂起等审批
+curl -X POST "localhost:8080/lesson22/approve/xxx?approved=true&comment=%E5%B1%9E%E5%AE%9E"          # 付款已执行
+curl "localhost:8080/lesson22/agent?user=carol&q=%E6%9F%A5%E4%B8%80%E4%B8%8BEX5002"                    # 行级拒绝
+curl "localhost:8080/lesson22/evals"                                                                # 4/4 全绿</pre>
     </div>
 
     <p style="color:#888; margin-top:30px;">想一个人都不设 key 检验构建：在工程目录 <code>mvn test</code> 即可（单元测试不联网）。</p>

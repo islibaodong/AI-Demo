@@ -79,8 +79,12 @@ public class RagConfig {
         String raw = new ClassPathResource("docs/spring-ai-knowledge.md")
                 .getContentAsString(StandardCharsets.UTF_8);
 
+        // Windows 上 git autocrlf 会把文件检出成 CRLF，"按空行切段"会全部失效
+        // （\\n{2,} 在 \\r\\n\\r\\n 里匹配不到），先归一化成 LF 再切
+        String normalized = raw.replace("\r\n", "\n");
+
         List<Document> docs = new ArrayList<>();
-        Arrays.stream(raw.split("\\n{2,}"))                 // 连续空行作为段落分隔
+        Arrays.stream(normalized.split("\\n{2,}"))          // 连续空行作为段落分隔
                 .map(String::trim)
                 .filter(StringUtils::hasText)               // 丢掉空段
                 .map(paragraph -> new Document(paragraph))  // 每段 = 一个可检索的 Document

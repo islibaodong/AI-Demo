@@ -6,7 +6,7 @@ AI 学习实验仓库。当前包含一个完整的 **Spring AI（Java）教学�
 
 | 目录 | 说明 |
 |------|------|
-| [`spring-ai-demo/`](spring-ai-demo/) | **Spring AI 学习实验室**：7 节课由浅入深（最简调用 → 提示词/结构化输出 → 流式 → 会话记忆 → 函数调用 → RAG → 图像生成），每课一个 `@RestController`，可独立 curl 体验，中文注释并标注与 Python LangChain 的概念对照。**详细文档见 [`spring-ai-demo/README.md`](spring-ai-demo/README.md)**。 |
+| [`spring-ai-demo/`](spring-ai-demo/) | **Spring AI 学习实验室**：22 节课由浅入深（基础调用 → RAG/Advisor/MCP/多模态 → 生产实战：健壮性/安全/可观测/输出修复 → 业务实战：Agent 编排/RAG 进阶/评估/Capstone → 企业级：多用户权限/工作流编排与人在环中/企业级 Agent 整合），每课一个 `@RestController`，可独立 curl 体验，中文注释并标注与 Python LangChain 的概念对照。**详细文档见 [`spring-ai-demo/README.md`](spring-ai-demo/README.md)**。 |
 | [`docs/`](docs/) | 学习计划与笔记（如 `202609.md`）。 |
 | [`CLAUDE.md`](CLAUDE.md) | 给 Claude Code 的工程说明（本机构建注意事项、版本矩阵、架构约定）。 |
 
@@ -19,7 +19,7 @@ cd spring-ai-demo
 export JAVA_HOME=/Users/islibaodong/Library/Java/JavaVirtualMachines/ms-21.0.9/Contents/Home
 export PATH=$JAVA_HOME/bin:$PATH
 
-# 离线构建 + 跑全部测试（5 个用例，不需要 API Key）
+# 离线构建 + 跑全部测试（21 个测试类 / 116 个用例，不需要 API Key）
 mvn clean package
 
 # 启动应用（需要 API Key）

@@ -1,6 +1,6 @@
 # Spring AI 学习实验室（Java）
 
-一份**由浅入深、可运行**的 Spring AI 教学工程：19 节课，每课一个核心概念，每个接口都能直接 curl 体验，
+一份**由浅入深、可运行**的 Spring AI 教学工程：22 节课，每课一个核心概念，每个接口都能直接 curl 体验，
 源码里配有中文注释，并标注了与 Python **LangChain** 的对应概念。
 
 > ⚠️ 先纠正一个常见混淆：**LangChain 是 Python 生态的框架**，Java 里没有官方 LangChain。
@@ -78,15 +78,15 @@ cp -n .env.example .env    # 首次运行前执行，然后在 .env 里填入你
 mvn spring-boot:run
 ```
 
-启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 18 个 demo 入口的首页。
+启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 22 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 18 个测试类共 86 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道/治理装饰器、混合检索/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成），**不需要 Key**。
+- `mvn test` —— 21 个测试类共 116 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道/治理装饰器、混合检索/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成、RBAC/行级权限/检索层过滤、状态图引擎/挂起恢复、权限探针跑批），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
 
-## 三、19 节课速查
+## 三、22 节课速查
 
 | # | 主题 | 端点 | 核心 API |
 |---|------|------|----------|
@@ -109,6 +109,9 @@ mvn spring-boot:run
 | 17 | RAG 业务进阶（业务） | `GET /lesson17/ingest[?update=invoice]`<br>`GET /lesson17/search?q=`<br>`GET /lesson17/ask?q=&threshold=` | 混合检索（向量+关键词→RRF）· 规则重排 · 增量灌库（docId 幂等/替换）· 拒答阈值 · 引用溯源 |
 | 18 | 评估与回归（业务） | `GET /lesson18/evals`<br>`GET /lesson18/judge?q=&answer=&reference=` | `EvalRunner` 探针跑批（通过率+失败明细）· 规则断言（Contains/NotContains/NonBlank）· LLM-as-Judge（1-5 分） |
 | 19 | 结课 Capstone（业务） | `GET /lesson19/setup`<br>`GET /lesson19/support?session=&q=`<br>`GET /lesson19/support/stream`<br>`GET /lesson19/summary?session=`<br>`GET /lesson19/evals` | 前 18 课整链组装：注入防护/敏感词打码/预算 Advisor + 记忆 + 混合检索拒答 + 治理工具链 + 泄露扫描 + 流式 + 三级修复摘要 + 探针回归（含用量与成本） |
+| 20 | 多用户权限与数据权限（企业） | `GET /lesson20/users`<br>`GET /lesson20/agent?user=&q=`<br>`GET /lesson20/knowledge?q=&user=`<br>`GET /lesson20/prompt-only?user=&q=` | `.toolContext` 身份旁路 · 工具级 RBAC · 行级数据权限 · 检索层密级过滤（提示词保密反面教材） |
+| 21 | 工作流编排：loop/graph/人在环中（企业） | `GET /lesson21/loop?topic=`<br>`GET /lesson21/graph/run?q=`<br>`POST /lesson21/graph/approve/{id}?approved=`<br>`GET /lesson21/graph/pending` | 手写 mini `StateGraph`（节点/条件边/循环硬顶）· interrupt 挂起 + checkpoint + resume（真人工审批） |
+| 22 | 企业级 Agent 开发（企业） | `GET /lesson22/agent?user=&q=`<br>`POST /lesson22/approve/{id}?approved=`<br>`GET /lesson22/evals` | 治理域整链：身份→权限过滤检索→治理 Agent（hooks 通道举手）→审批挂起/恢复→用量成本→权限探针回归 |
 
 ### 逐个 curl 体验
 
@@ -241,6 +244,26 @@ curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
 curl -N -G "localhost:8080/lesson19/support/stream" --data-urlencode "q=退款多久到账"  # SSE 流式
 curl "localhost:8080/lesson19/summary?session=s1"          # 会话历史 → 工单 JSON（三级修复）
 curl "localhost:8080/lesson19/evals"                       # 结课回归：4 条探针跑批
+
+# 20 多用户权限：同一句话换不同用户，看三层权限差异
+curl "localhost:8080/lesson20/users"
+curl "localhost:8080/lesson20/agent?user=carol&q=查一下订单A1003"   # 行级拒绝（别人的订单）
+curl "localhost:8080/lesson20/agent?user=alice&q=查一下订单A1003"   # 管理员可见
+curl "localhost:8080/lesson20/agent?user=carol&q=帮我取消订单A1001" # RBAC 拒绝（员工不能取消）
+curl "localhost:8080/lesson20/knowledge?q=差旅住宿标准&user=carol"  # 检索层过滤：机密不在候选集
+curl "localhost:8080/lesson20/prompt-only?user=carol&q=..."        # 反面教材：机密进提示词=已暴露
+
+# 21 工作流编排：显式 loop / 状态图 / 人在环中（审批挂起跨请求恢复）
+curl "localhost:8080/lesson21/loop?topic=机械键盘促销"              # trace 能看到 draft→review 循环
+curl "localhost:8080/lesson21/graph/run?q=订单A1001要退款"          # suspended + executionId
+curl -X POST "localhost:8080/lesson21/graph/approve/<executionId>?approved=false&comment=不符合政策"
+curl "localhost:8080/lesson21/graph/pending"                       # 待审批列表
+
+# 22 企业级 Agent：权限→审批→观测→回归一条链
+curl "localhost:8080/lesson22/agent?user=bob&q=帮我的报销单EX5002发起付款"  # 挂起等审批
+curl -X POST "localhost:8080/lesson22/approve/<executionId>?approved=true&comment=属实"  # 付款已执行
+curl "localhost:8080/lesson22/agent?user=carol&q=查一下EX5002"      # 行级拒绝
+curl "localhost:8080/lesson22/evals"                               # 4/4 权限探针
 ```
 
 > **第 6 课的验证技巧**：`docs/spring-ai-knowledge.md` 里的「创始人」信息是编造的、不在模型预训练数据里。
@@ -284,6 +307,11 @@ curl "localhost:8080/lesson19/evals"                       # 结课回归：4 �
 | ContextualCompressionRetriever + 重排 | `HybridRetriever.rerank`（规则版；生产换 bge-reranker 等 cross-encoder） | `lesson17_rag_advanced` |
 | LangSmith evaluate / string evaluator | `EvalRunner` 探针跑批 + `LlmJudge`（1-5 分裁判，score>=4 通过） | `lesson18_evals` |
 | LangGraph StateGraph（守卫→检索→Agent→输出守卫） | Capstone 整链：Advisor 链做横切关注点 + ChatClient 组装业务流 | `lesson19_capstone` |
+| `RunnableConfig` 按请求传用户上下文 | `.toolContext(Map)` + 工具方法的 `ToolContext` 参数 | `lesson20_permissions` |
+| 数据层行级权限 / SelfQueryRetriever metadata filter | 工具内行级闸门 + `PermissionFilteredRetriever`（检索层密级过滤） | `lesson20_permissions` |
+| LangGraph `add_node` / `add_conditional_edges` / `interrupt()` + checkpointer | 手写 `StateGraph`（节点/条件边/`HumanInputRequired` 挂起 + `CheckpointStore` resume） | `lesson21_graph` |
+| LangGraph 硬管控型 human-in-the-loop（等真人决定再走分支） | `riskGate` 审批门节点挂起 + approve 接口恢复 | `lesson21_graph` / `lesson22_enterprise` |
+| 企业 Agent 平台（身份/授权/审批/审计/评估一体） | `paymentGraph` 治理域整链 + 权限探针回归 | `lesson22_enterprise` |
 
 ---
 
@@ -317,13 +345,16 @@ spring-ai-demo/
     │   │   ├── lesson17_rag_advanced/ # RAG 业务进阶（混合检索/重排/增量灌库/拒答/引用）
     │   │   ├── lesson18_evals/      # 评估与回归（探针跑批/LLM 裁判）
     │   │   ├── lesson19_capstone/  # 结课 Capstone（mini 智能客服系统，前 18 课整链组装）
+    │   │   ├── lesson20_permissions/ # 多用户权限与数据权限（ToolContext 身份/RBAC/行级/检索层过滤）
+    │   │   ├── lesson21_graph/     # 工作流编排（mini StateGraph/显式 loop/人在环中挂起恢复）
+    │   │   ├── lesson22_enterprise/ # 企业级 Agent 开发（治理域整链：权限→审批→观测→回归）
     │   │   └── config/             # DotEnvEnvironmentPostProcessor（.env 加载）
     │   └── resources/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
     │       ├── images/demo-scene.png         # lesson11 视觉探针图（程序手绘）
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 18 个测试类 / 86 个离线用例
+    └── test/java/com/example/demo/           # 21 个测试类 / 116 个离线用例
 ```
 
 > 运行时会在工程目录下生成 `data/`（H2 数据库文件 + 向量库 JSON，均已 gitignore）；
@@ -409,10 +440,11 @@ lesson09 起灌库会自动落盘到 `data/vector-store.json`，重启后自动�
 
 ## 八、下一步建议
 
-学完这 12 课，可以继续深入：
+学完这 22 课，可以继续深入：
 1. **把 H2 换成真正的数据库**：改 `spring.datasource.url` + 换驱动依赖即可，代码零改动（第 9 课的抽象价值）。
 2. **可观测性**：接入 Micrometer / OpenTelemetry 观察 token 消耗与延迟。
 3. **MCP 进阶**：把第 10 课的 stdio 服务器换成 SSE 远程服务，或用 `spring-ai-starter-mcp-server` 把自己的业务包装成 MCP 服务器对外开放。
 4. **多模态进阶**：视频输入、音频作为对话输入（gpt-4o-audio）、以及流式语音。
 5. **安全防护**：Prompt 注入防护（OWASP LLM01）、输入/输出校验、工具最小权限。
-6. **可观测性与成本**：Micrometer 指标、token 成本统计、会话上下文有界治理。
+6. **权限体系生产化**：第 20 课的内存用户目录换成 SSO/OAuth，检索层过滤下推到向量库的 metadata filter（pgvector `WHERE`）。
+7. **工作流引擎**：第 21 课的 mini StateGraph 换成 LangGraph4j / Flowable 级引擎，checkpoint 落库实现跨进程恢复。

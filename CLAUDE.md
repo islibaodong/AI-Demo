@@ -13,6 +13,15 @@ export PATH=$JAVA_HOME/bin:$PATH
 
 Maven 跟随 `JAVA_HOME`，不切会直接编译失败。shell 状态不跨命令持久化，所以每次调用都要带上。
 
+> 上面是 macOS 路径（工程最初在 Mac 上开发）。**本机（Windows）用**：
+> `export JAVA_HOME="C:\Users\Administrator\.jdks\ms-21.0.12.1"`（IDEA 托管的 ms-21.0.12.1）。
+>
+> Windows 另有两个环境坑（均已处理，换机器要重做）：
+> ① lesson10/MCP 需要 `python3` 命令，Windows 只有 `python.exe`——已在 `D:\Python313\` 复制出
+> `python3.exe` 垫片，否则启动/测试全挂（`mcpSyncClients` 初始化失败连累所有 `@SpringBootTest`）；
+> ② `core.autocrlf=true` 会把 markdown 检出成 CRLF，`RagConfig.loadKnowledgeDocuments` 按
+> `\n{2,}` 切块会失效——已在读取时归一化 CRLF→LF（`RagChunkingTest` 卡这个）。
+
 ## 常用命令
 
 ```bash
@@ -54,7 +63,7 @@ mvn spring-boot:run
 
 ### 每个 lesson 是一个自包含的 package
 
-`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态 → 健壮性 → 安全防护 → 可观测与成本 → 结构化输出修复 → Agent 编排 → RAG 业务进阶 → 评估与回归 → 结课 Capstone（整链组装）。
+`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态 → 健壮性 → 安全防护 → 可观测与成本 → 结构化输出修复 → Agent 编排 → RAG 业务进阶 → 评估与回归 → 结课 Capstone（整链组装）→ 多用户权限/数据权限 → 工作流编排（loop/graph/人在环中）→ 企业级 Agent 整合。
 
 **贯穿全工程的模式**：各 Controller 都注入自动配置好的 `ChatClient.Builder`，再按本课需要定制后 `.build()` 出自己的 `ChatClient` 实例——
 
@@ -172,6 +181,33 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 - **假中转站支持**（三条件缺一不可，注意分支顺序）：Agent 链按 last assistant tool_call 驱动，**首步条件必须是 `带 tools 且无 tool_call 且含「订单」`**（lesson19 的 RAG 文案里也有「退款」，条件宽了会劫持纯问答）；capstone 资料分支 `system 含「依据下面的资料」且 last_text 含「退款」且无 tool_call 且非 stream` → 返回 "退款 3-5 个工作日原路退回 [1]。"——**必须排除已有 tool_call 的会话**（capstone 的客服请求也带 tools，否则会把 Agent 第二轮劫持成纯文本）**且排除 stream 请求**（SSE 要放行给流式分支）。
 - **摘要端点的策略回包**：`parsed.strategy().name()` 是 String（EXTRACT 等），不是枚举本身。
 
+### lesson20 的多用户权限与数据权限
+
+三层闸门：① **身份旁路**——`.toolContext(Map.of("user", principal))` 放身份，工具方法声明 `ToolContext` 参数取（识别靠参数类型，不占模型 schema）；**身份绝不进提示词**（可被注入诱导）。② **工具级 RBAC**（`OrderTools`：员工不能 cancelOrder/companyRevenueReport）。③ **行级数据权限**（本人/同部门/管理员）+ RAG 侧 `PermissionFilteredRetriever`（检索前按 `visibility` metadata 过滤密级，未打标默认 CONFIDENTIAL——默认拒绝）。`/lesson20/prompt-only` 是"机密进提示词+叮嘱保密"的反面教材。
+
+2.0 实测确认的 API/事实：
+- **`MethodToolCallback.validateToolContextSupport` 要求非空 ToolContext**：工具方法声明了 `ToolContext` 参数时，`call(input)` 或传空 map 的 context 会直接抛 `IllegalArgumentException`（"ToolContext is required by the method as an argument"），**工具方法根本不执行**。所以"未登录"的真实形态是"上下文非空但没放 user 键"，工具内 `requireLogin` 兜的是这层；离线测试不能传空 map。
+- **lesson16 的 `GovernedTool` 不能直接复用**：它的 `call(input, ctx)` 重载委托 `governCall` 后调的是 `target.call(input)`，**ToolContext 会被丢掉**。带身份的工具必须用 lesson20 的 `AuditedTool`（public static，lesson22 复用），两个 call 重载都把 ctx 转发到 `real.call(input, ctx)`。
+
+### lesson21 的工作流编排（mini StateGraph + 人在环中）
+
+手写引擎三件套：`StateGraph`（节点/固定边/条件边/entry，状态就是 `Map<String,Object>`）、`CompiledGraph`（主循环 + `maxSteps` 硬顶，默认 24）、`CheckpointStore`（挂起快照：executionId + 挂起节点 + 状态 + trace + 步数）。节点抛 `HumanInputRequired` → 引擎冻结快照返回 `suspended`；`resume(id, humanInput)` 取走快照（**取即删**，重复 resume 报"不存在或已恢复"）、把人工输入合并进状态、**从挂起节点重入**——节点第二次执行读状态分支（LangGraph interrupt/resume 的全部秘密）。trace 里挂起节点会出现两次（挂起一次 + 重入一次）。
+
+- **路由目标必须是已注册节点或 END**：返回未注册的字符串会被主循环当节点执行而抛"节点未注册"（写作时就踩过：`addEdge("noorder", END)` 想造"虚拟终点"是错的，条件边直接返回 `END` 即可）。
+- **`RefundApprovalWorkflow` 全程不调模型**（分类用关键词、FAQ 用固定话术）——人在环中的机制验证不需要模型，离线测试因此能覆盖完整审批闭环（挂起→批准→执行 / 拒绝→转人工）。
+- lesson21 的 loop 端点（draft→review→revise）是真调模型的：业务轮数上限 + 引擎步数上限双保险；评审打分解析失败按满分放行（评审失效时宁可放行也不能死循环烧钱）。
+
+### lesson22 的企业级 Agent 整合
+
+治理域整链：身份解析（20）→ 权限过滤检索（复用 `Lesson20Controller.kbCorpus()`/`PermissionFilteredRetriever`，均已 public）→ 治理 Agent（`Lesson20Controller.AuditedTool` + 工具内 RBAC/行级）→ `riskGate` 审批门挂起（21）→ 人工批准后 `executePayment` → tokens/成本（14）→ 权限探针（18 `EvalRunner`）。
+
+- **hooks 通道**：工具与图节点通过 ToolContext 里的共享 Map 通信——`requestPayment` 校验通过后把 `pendingPayment/pendingAmount` 写进 hooks 并返回"已提交审批"（**不直接执行付款**），agent 节点在模型返回后读 hooks 合并进图状态。模型输出可诱导，代码写入才可信。
+- **图结构与模型解耦**：`paymentGraph(StateGraph.Node agentNode)` 把 agent 节点做成注入点（生产=模型调用，测试=假函数设 pendingPayment），这是 lesson22 离线可测的关键。
+- **探针跑批走纯 Java 路径**（工具直调 + 检索直调，SUT 输入格式 `"<工具> <单号> as <用户>"` / `"filter <词> as <用户>"`）：权限是安全属性，回归必须确定性、不依赖模型。
+- 与 lesson16/21 审批的关系：16=拦截改道（模型在场自主改道，软治理）；21/22=流程冻结等真人决定（硬管控，高危写操作用后者）。
+
+
+
 ### lesson11 的多模态
 
 三个独立端点：视觉问答（`UserMessage.builder().text(q).media(Media...)` 挂 `org.springframework.ai.content.Media`，TTS（`OpenAiAudioSpeechModel.call(text)` 直接返回 mp3 `byte[]`）、STT（`TranscriptionModel.call(new AudioTranscriptionPrompt(resource))`，`response.getResults().get(0).getOutput()` **直接返回 String**，没有 `.getText()`）。语音 Bean 由 openai starter 自动装配（`spring.ai.model.audio.speech/transcription` 默认 openai），配置在 `spring.ai.openai.audio.speech.{model,voice}` / `audio.transcription.model`。
@@ -195,7 +231,7 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 
 另一个实测结论：Spring AI 2.0 底层的 OpenAI 官方 SDK 请求路径 = `base-url` + `/chat/completions`，**不会自动补 `/v1`**，所以 `base-url` 默认值是 `https://api.openai.com/v1`（带 `/v1`）。中转站同理。另外 SDK 对连接级失败（域名不存在）不抛异常，表现为接口返回空 body 的 200。
 
-**测试必须全部离线。** 现有 18 个测试类共 86 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`、`Lesson12RobustnessTest`、`Lesson13SecurityTest`、`Lesson14ObservabilityTest`、`Lesson15StructuredOutputTest`、`Lesson16AgentTest`、`Lesson17RagAdvancedTest`、`Lesson18EvalsTest`、`Lesson19CapstoneTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装、成本估算/内置指标/预算防护、解析失败探针/三级修复管道、治理装饰器（审批门/预算/审计）、混合检索/RRF/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成（bigram 假 embedding + 真实 Advisor 链：打码进模型前/注入不泄露/拒答不调模型/工单 JSON 解析）。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
+**测试必须全部离线。** 现有 21 个测试类共 116 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`、`Lesson12RobustnessTest`、`Lesson13SecurityTest`、`Lesson14ObservabilityTest`、`Lesson15StructuredOutputTest`、`Lesson16AgentTest`、`Lesson17RagAdvancedTest`、`Lesson18EvalsTest`、`Lesson19CapstoneTest`、`Lesson20PermissionsTest`、`Lesson21GraphTest`、`Lesson22EnterpriseTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装、成本估算/内置指标/预算防护、解析失败探针/三级修复管道、治理装饰器（审批门/预算/审计）、混合检索/RRF/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成（bigram 假 embedding + 真实 Advisor 链：打码进模型前/注入不泄露/拒答不调模型/工单 JSON 解析）、权限三层闸门（RBAC/行级/检索层过滤，真实走 ToolContext 通路）、图引擎（顺序/条件路由/循环硬顶/挂起-恢复闭环）、企业治理域（hooks 通道/付款审批挂起/权限探针跑批）。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
 
 **注释用中文，并标注对应的 LangChain 概念。** 这个工程的目标读者是从 Python LangChain 转过来的人（注意：LangChain 是 Python 生态的，Java 没有官方对应物，本工程教的就是 Spring AI 本身）。
 
@@ -223,6 +259,8 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 | JSON 解析异常 catch `com.fasterxml...JsonProcessingException` | Jackson 3 换包为 `tools.jackson`，统一 catch `tools.jackson.core.JacksonException`（unchecked） |
 | `call().content()` 后再 `call().chatResponse()` 取元数据 | 二者是独立终端操作，各触发一次完整调用（第二个抛 "No CallAdvisors available"）；只调 `chatResponse()`，answer/metadata 都从它取 |
 | `.stream()` 挂 `MessageChatMemoryAdvisor` + `.advisors(a -> a.param(SESSION_KEY, ...))` | 2.0.0 必抛 "conversationId cannot be null"：聚合后的响应 chunk 不携带 advisor params（call 路径正常）；流式用无记忆 Advisor 的 client |
+| 工具方法声明 `ToolContext` 参数后传 null/空上下文 | 2.0 `validateToolContextSupport` 要求**非空**：直接抛 IllegalArgumentException，工具不执行；"未登录"场景=上下文非空但没放 user 键 |
+| 复用 lesson16 `GovernedTool` 包带身份的工具 | 不行：其 `call(input, ctx)` 重载最终调 `target.call(input)`，**ToolContext 被丢弃**；用 lesson20 `AuditedTool`（两个重载都转发 ctx） |
 
 ## 第 6 课的验证技巧
 
