@@ -108,6 +108,15 @@
             <artifactId>spring-ai-starter-mcp-client</artifactId>
         </dependency>
 
+        <!-- 企业级专题（lesson23+）：Spring AI 社区的 Claude Code 移植工具箱——
+             长期记忆（AutoMemoryTools）、Agent 技能（SkillsTool）、子代理编排（TaskTool）。
+             声明依赖 Spring AI 2.0.1，对 2.0.0 二进制兼容（冒烟测试 AgentUtilsCompatTest 验证）。 -->
+        <dependency>
+            <groupId>org.springaicommunity</groupId>
+            <artifactId>spring-ai-agent-utils</artifactId>
+            <version>0.12.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
