@@ -63,7 +63,7 @@ mvn spring-boot:run
 
 ### 每个 lesson 是一个自包含的 package
 
-`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态 → 健壮性 → 安全防护 → 可观测与成本 → 结构化输出修复 → Agent 编排 → RAG 业务进阶 → 评估与回归 → 结课 Capstone（整链组装）→ 多用户权限/数据权限 → 工作流编排（loop/graph/人在环中）→ 企业级 Agent 整合。
+`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态 → 健壮性 → 安全防护 → 可观测与成本 → 结构化输出修复 → Agent 编排 → RAG 业务进阶 → 评估与回归 → 结课 Capstone（整链组装）→ 多用户权限/数据权限 → 工作流编排（loop/graph/人在环中）→ 企业级 Agent 整合 → 长期记忆 → Agent 技能（Skills）→ 子代理编排（多智能体）→ 上下文工程与压缩。
 
 **贯穿全工程的模式**：各 Controller 都注入自动配置好的 `ChatClient.Builder`，再按本课需要定制后 `.build()` 出自己的 `ChatClient` 实例——
 
@@ -208,6 +208,18 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 
 
 
+### lesson23~26 的企业级进阶（spring-ai-agent-utils：长期记忆/技能/子代理/上下文压缩）
+
+依赖 `org.springaicommunity:spring-ai-agent-utils:0.12.0`（POM 声明 spring-ai 2.0.1，**对 2.0.0 二进制兼容**，`AgentUtilsCompatTest` 冒烟验证；传递引入社区 `spring-ai-session:0.7.0`）。四课与 LangChain 对照：AutoMemoryTools≈Claude Code memory/Memory Tool；SkillsTool≈Agent Skills 开放标准；TaskTool≈Claude Code subagents；SessionCompactor≈LangGraph Session API/Anthropic Compaction。
+
+2.0 实测确认的 API/事实（写测试前必读）：
+- **2.0 的工具循环由 ChatClient 自动注册的 `ToolCallingAdvisor` 驱动**（order = HIGHEST_PRECEDENCE+300），且只在请求 options 是 `ToolCallingChatOptions` 时介入——options 从**模型的 `getOptions()` 复制而来**。真实 OpenAiChatModel 的默认 options 就是该类型；**Mockito mock 返回普通 `ChatOptions` 时整条工具链路被静默跳过**（模型返回的工具调用永远不执行，无报错）。测试基建 `support/ScriptedToolCallingChatModel` 据此实现：`getOptions()` 返回 `ToolCallingChatOptions.builder().build()`，回答按脚本出队，工具由 Advisor 真实执行；并记录每次收到的 `Prompt`（`observedCalls()`）供断言"模型看到了什么"。
+- `AutoMemoryToolsAdvisor.before()` 同样只在 options 已是 `ToolCallingChatOptions` 时注入记忆工具与系统提示（否则整个 no-op）；它与 `MessageChatMemoryAdvisor` 可同链共存（双层记忆）。
+- 官方推荐栈显式挂 `ToolCallAdvisor`（博客写法）；本工程直接用自动注册的 `ToolCallingAdvisor`，二者等价。
+- **`ToolResponseMessage` 构造器是 protected 的**，公开路径走 `ToolResponseMessage.builder().responses(...).build()`；且其 `getText()` 返回**空串**，真实载荷在 `getResponses()` 的 `responseData()` 里——`SessionCompactor` 的 token 估算若只看 `getText()` 会永远不触发压缩（实测踩过）。
+- 主代理委派循环：主模型只被调**两次**（委派前发起 Task 工具调用、委派后汇总）；子代理在独立 ChatClient 里消耗自己的模型调用；Task 工具结果以 `ToolResponseMessage` 形式并入主代理历史（`getText()` 同样为空，断言要看 `getResponses()`）。子代理的模型来源由 `ClaudeSubagentType.builder().chatClientBuilder("default", builder)` 提供——换模型路由就是换这个 builder。
+- 子代理/技能定义是**工作目录相对路径**（`src/main/resources/agents`、`src/main/resources/skills`），`mvn spring-boot:run` 与测试的工作目录都是 `spring-ai-demo/`，无需额外配置。
+
 ### lesson11 的多模态
 
 三个独立端点：视觉问答（`UserMessage.builder().text(q).media(Media...)` 挂 `org.springframework.ai.content.Media`，TTS（`OpenAiAudioSpeechModel.call(text)` 直接返回 mp3 `byte[]`）、STT（`TranscriptionModel.call(new AudioTranscriptionPrompt(resource))`，`response.getResults().get(0).getOutput()` **直接返回 String**，没有 `.getText()`）。语音 Bean 由 openai starter 自动装配（`spring.ai.model.audio.speech/transcription` 默认 openai），配置在 `spring.ai.openai.audio.speech.{model,voice}` / `audio.transcription.model`。
@@ -231,7 +243,7 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 
 另一个实测结论：Spring AI 2.0 底层的 OpenAI 官方 SDK 请求路径 = `base-url` + `/chat/completions`，**不会自动补 `/v1`**，所以 `base-url` 默认值是 `https://api.openai.com/v1`（带 `/v1`）。中转站同理。另外 SDK 对连接级失败（域名不存在）不抛异常，表现为接口返回空 body 的 200。
 
-**测试必须全部离线。** 现有 21 个测试类共 116 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`、`Lesson12RobustnessTest`、`Lesson13SecurityTest`、`Lesson14ObservabilityTest`、`Lesson15StructuredOutputTest`、`Lesson16AgentTest`、`Lesson17RagAdvancedTest`、`Lesson18EvalsTest`、`Lesson19CapstoneTest`、`Lesson20PermissionsTest`、`Lesson21GraphTest`、`Lesson22EnterpriseTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装、成本估算/内置指标/预算防护、解析失败探针/三级修复管道、治理装饰器（审批门/预算/审计）、混合检索/RRF/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成（bigram 假 embedding + 真实 Advisor 链：打码进模型前/注入不泄露/拒答不调模型/工单 JSON 解析）、权限三层闸门（RBAC/行级/检索层过滤，真实走 ToolContext 通路）、图引擎（顺序/条件路由/循环硬顶/挂起-恢复闭环）、企业治理域（hooks 通道/付款审批挂起/权限探针跑批）。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
+**测试必须全部离线。** 现有 26 个测试类共 135 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`、`Lesson12RobustnessTest`、`Lesson13SecurityTest`、`Lesson14ObservabilityTest`、`Lesson15StructuredOutputTest`、`Lesson16AgentTest`、`Lesson17RagAdvancedTest`、`Lesson18EvalsTest`、`Lesson19CapstoneTest`、`Lesson20PermissionsTest`、`Lesson21GraphTest`、`Lesson22EnterpriseTest`、`AgentUtilsCompatTest`、`Lesson23MemoryTest`、`Lesson24SkillsTest`、`Lesson25SubagentTest`、`Lesson26ContextTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装、成本估算/内置指标/预算防护、解析失败探针/三级修复管道、治理装饰器（审批门/预算/审计）、混合检索/RRF/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成（bigram 假 embedding + 真实 Advisor 链：打码进模型前/注入不泄露/拒答不调模型/工单 JSON 解析）、权限三层闸门（RBAC/行级/检索层过滤，真实走 ToolContext 通路）、图引擎（顺序/条件路由/循环硬顶/挂起-恢复闭环）、企业治理域（hooks 通道/付款审批挂起/权限探针跑批）、agent-utils 兼容冒烟、长期记忆工具循环落盘/双层记忆共存/记忆 CRUD、技能发现与一二三级披露边界、子代理 Registry/委派闭环（ToolResponse 回流断言）、两级压缩/保留区/台账/Advisor 管线端到端。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
 
 **注释用中文，并标注对应的 LangChain 概念。** 这个工程的目标读者是从 Python LangChain 转过来的人（注意：LangChain 是 Python 生态的，Java 没有官方对应物，本工程教的就是 Spring AI 本身）。
 
@@ -261,6 +273,9 @@ Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 
 | `.stream()` 挂 `MessageChatMemoryAdvisor` + `.advisors(a -> a.param(SESSION_KEY, ...))` | 2.0.0 必抛 "conversationId cannot be null"：聚合后的响应 chunk 不携带 advisor params（call 路径正常）；流式用无记忆 Advisor 的 client |
 | 工具方法声明 `ToolContext` 参数后传 null/空上下文 | 2.0 `validateToolContextSupport` 要求**非空**：直接抛 IllegalArgumentException，工具不执行；"未登录"场景=上下文非空但没放 user 键 |
 | 复用 lesson16 `GovernedTool` 包带身份的工具 | 不行：其 `call(input, ctx)` 重载最终调 `target.call(input)`，**ToolContext 被丢弃**；用 lesson20 `AuditedTool`（两个重载都转发 ctx） |
+| mock ChatModel 返回普通 `ChatOptions` | 2.0 工具链路被**静默跳过**（options 需为 `ToolCallingChatOptions`，且从模型 `getOptions()` 复制）；测试用 `support/ScriptedToolCallingChatModel` |
+| `new ToolResponseMessage(list)` | 构造器 protected；用 `ToolResponseMessage.builder().responses(...).build()`；`getText()` 对工具消息返回空串，载荷在 `getResponses()` 里 |
+| 2.0 工具循环在模型内部 | 更正：循环由 ChatClient 自动注册的 `ToolCallingAdvisor` 驱动（lesson25 实测）；mock 模型配合得当也能跑完整循环 |
 
 ## 第 6 课的验证技巧
 

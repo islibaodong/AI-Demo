@@ -1,6 +1,6 @@
 # Spring AI 学习实验室（Java）
 
-一份**由浅入深、可运行**的 Spring AI 教学工程：22 节课，每课一个核心概念，每个接口都能直接 curl 体验，
+一份**由浅入深、可运行**的 Spring AI 教学工程：26 节课，每课一个核心概念，每个接口都能直接 curl 体验，
 源码里配有中文注释，并标注了与 Python **LangChain** 的对应概念。
 
 > ⚠️ 先纠正一个常见混淆：**LangChain 是 Python 生态的框架**，Java 里没有官方 LangChain。
@@ -78,15 +78,15 @@ cp -n .env.example .env    # 首次运行前执行，然后在 .env 里填入你
 mvn spring-boot:run
 ```
 
-启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 22 个 demo 入口的首页。
+启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 26 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 21 个测试类共 116 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道/治理装饰器、混合检索/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成、RBAC/行级权限/检索层过滤、状态图引擎/挂起恢复、权限探针跑批），**不需要 Key**。
+- `mvn test` —— 26 个测试类共 135 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道/治理装饰器、混合检索/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成、RBAC/行级权限/检索层过滤、状态图引擎/挂起恢复、权限探针跑批、长期记忆读写/技能披露/子代理委派闭环/两级压缩），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
 
-## 三、22 节课速查
+## 三、26 节课速查
 
 | # | 主题 | 端点 | 核心 API |
 |---|------|------|----------|
@@ -112,6 +112,10 @@ mvn spring-boot:run
 | 20 | 多用户权限与数据权限（企业） | `GET /lesson20/users`<br>`GET /lesson20/agent?user=&q=`<br>`GET /lesson20/knowledge?q=&user=`<br>`GET /lesson20/prompt-only?user=&q=` | `.toolContext` 身份旁路 · 工具级 RBAC · 行级数据权限 · 检索层密级过滤（提示词保密反面教材） |
 | 21 | 工作流编排：loop/graph/人在环中（企业） | `GET /lesson21/loop?topic=`<br>`GET /lesson21/graph/run?q=`<br>`POST /lesson21/graph/approve/{id}?approved=`<br>`GET /lesson21/graph/pending` | 手写 mini `StateGraph`（节点/条件边/循环硬顶）· interrupt 挂起 + checkpoint + resume（真人工审批） |
 | 22 | 企业级 Agent 开发（企业） | `GET /lesson22/agent?user=&q=`<br>`POST /lesson22/approve/{id}?approved=`<br>`GET /lesson22/evals` | 治理域整链：身份→权限过滤检索→治理 Agent（hooks 通道举手）→审批挂起/恢复→用量成本→权限探针回归 |
+| 23 | Agent 长期记忆（企业） | `GET /lesson23/chat?q=`<br>`GET /lesson23/memory` | `AutoMemoryToolsAdvisor`（MEMORY.md 索引 + 四类记忆文件，落盘跨会话）· 与 ChatMemory 的分工 · Mem0/Letta/Zep 路线对照 |
+| 24 | Agent 技能 Skills（企业） | `GET /lesson24/skills`<br>`GET /lesson24/chat?q=` | `SkillsTool` + SKILL.md · 渐进披露三级加载（元数据常驻/正文展开/资源按需）· 技能 vs 工具 vs RAG |
+| 25 | 子代理编排 多智能体（企业） | `GET /lesson25/agents`<br>`GET /lesson25/chat?q=` | `TaskTool` + Agent Registry · `agents/*.md` 声明式子代理 · 独立上下文窗口 · 多模型路由 · A2A 概览 |
+| 26 | 上下文工程与压缩（企业） | `GET /lesson26/compact[?budget=]`<br>`GET /lesson26/chat?session=&q=` | 手写 `SessionCompactor`（杠杆1清旧工具结果→杠杆2结构化摘要）· 保留区 · 压缩台账 · `CompactionAdvisor` 接入管线 |
 
 ### 逐个 curl 体验
 
@@ -264,6 +268,23 @@ curl "localhost:8080/lesson22/agent?user=bob&q=帮我的报销单EX5002发起付
 curl -X POST "localhost:8080/lesson22/approve/<executionId>?approved=true&comment=属实"  # 付款已执行
 curl "localhost:8080/lesson22/agent?user=carol&q=查一下EX5002"      # 行级拒绝
 curl "localhost:8080/lesson22/evals"                               # 4/4 权限探针
+
+# 23 长期记忆：第一次写入，之后任何会话都能答出来（memory 端点看落盘文件）
+curl "localhost:8080/lesson23/chat?q=请记住：我叫小明，是后端工程师，喜欢简洁的回复"
+curl "localhost:8080/lesson23/memory"
+curl "localhost:8080/lesson23/chat?q=我喜欢什么样的回复风格？"
+
+# 24 技能：一级披露（只有元数据）→ 对话时按名装载正文
+curl "localhost:8080/lesson24/skills"
+curl "localhost:8080/lesson24/chat?q=出差住上海，住宿能报销多少？"
+
+# 25 子代理：Registry 声明式定义，主代理自主委派
+curl "localhost:8080/lesson25/agents"
+curl "localhost:8080/lesson25/chat?q=调研一下报销政策里住宿标准的要点，再写成给客户的正式说明"
+
+# 26 压缩：两级杠杆与台账；预算更紧触发二级摘要
+curl "localhost:8080/lesson26/compact"
+curl "localhost:8080/lesson26/compact?budget=150"
 ```
 
 > **第 6 课的验证技巧**：`docs/spring-ai-knowledge.md` 里的「创始人」信息是编造的、不在模型预训练数据里。
@@ -312,6 +333,10 @@ curl "localhost:8080/lesson22/evals"                               # 4/4 权限�
 | LangGraph `add_node` / `add_conditional_edges` / `interrupt()` + checkpointer | 手写 `StateGraph`（节点/条件边/`HumanInputRequired` 挂起 + `CheckpointStore` resume） | `lesson21_graph` |
 | LangGraph 硬管控型 human-in-the-loop（等真人决定再走分支） | `riskGate` 审批门节点挂起 + approve 接口恢复 | `lesson21_graph` / `lesson22_enterprise` |
 | 企业 Agent 平台（身份/授权/审批/审计/评估一体） | `paymentGraph` 治理域整链 + 权限探针回归 | `lesson22_enterprise` |
+| Claude Code memory / Anthropic Memory Tool（agent 自管长期记忆） | `AutoMemoryToolsAdvisor`（MEMORY.md 索引 + 四类记忆文件落盘） | `lesson23_memory` |
+| Agent Skills 开放标准（SKILL.md 渐进披露） | `SkillsTool`（一级元数据→二级正文→三级资源） | `lesson24_skills` |
+| Claude Code subagents / A2A | `TaskTool` + Agent Registry（`agents/*.md` 定义、独立上下文窗口） | `lesson25_subagents` |
+| LangGraph Session API / Anthropic Compaction（上下文压缩） | 手写 `SessionCompactor`（清工具结果→结构化摘要→台账）+ `CompactionAdvisor` | `lesson26_context` |
 
 ---
 
@@ -348,13 +373,19 @@ spring-ai-demo/
     │   │   ├── lesson20_permissions/ # 多用户权限与数据权限（ToolContext 身份/RBAC/行级/检索层过滤）
     │   │   ├── lesson21_graph/     # 工作流编排（mini StateGraph/显式 loop/人在环中挂起恢复）
     │   │   ├── lesson22_enterprise/ # 企业级 Agent 开发（治理域整链：权限→审批→观测→回归）
+    │   │   ├── lesson23_memory/     # Agent 长期记忆（AutoMemoryTools，MEMORY.md 索引）
+    │   │   ├── lesson24_skills/     # Agent 技能（SkillsTool，SKILL.md 渐进披露）
+    │   │   ├── lesson25_subagents/  # 子代理编排（TaskTool，agents/*.md 声明式定义）
+    │   │   ├── lesson26_context/    # 上下文工程与压缩（SessionCompactor/CompactionAdvisor）
     │   │   └── config/             # DotEnvEnvironmentPostProcessor（.env 加载）
     │   └── resources/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
     │       ├── images/demo-scene.png         # lesson11 视觉探针图（程序手绘）
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 21 个测试类 / 116 个离线用例
+    ├── resources/skills/              # lesson24 的技能定义（SKILL.md）
+    ├── resources/agents/              # lesson25 的子代理定义（agents/*.md）
+    └── test/java/com/example/demo/           # 26 个测试类 / 135 个离线用例
 ```
 
 > 运行时会在工程目录下生成 `data/`（H2 数据库文件 + 向量库 JSON，均已 gitignore）；
@@ -440,7 +471,7 @@ lesson09 起灌库会自动落盘到 `data/vector-store.json`，重启后自动�
 
 ## 八、下一步建议
 
-学完这 22 课，可以继续深入：
+学完这 26 课，可以继续深入：
 1. **把 H2 换成真正的数据库**：改 `spring.datasource.url` + 换驱动依赖即可，代码零改动（第 9 课的抽象价值）。
 2. **可观测性**：接入 Micrometer / OpenTelemetry 观察 token 消耗与延迟。
 3. **MCP 进阶**：把第 10 课的 stdio 服务器换成 SSE 远程服务，或用 `spring-ai-starter-mcp-server` 把自己的业务包装成 MCP 服务器对外开放。
