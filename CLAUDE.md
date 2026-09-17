@@ -18,7 +18,7 @@ Maven 跟随 `JAVA_HOME`，不切会直接编译失败。shell 状态不跨命�
 ```bash
 cd spring-ai-demo
 
-# 构建 + 跑全部测试（10 个测试类 / 24 个用例，全部离线，不需要 API Key）
+# 构建 + 跑全部测试（14 个测试类 / 60 个用例，全部离线，不需要 API Key）
 export JAVA_HOME=/Users/islibaodong/Library/Java/JavaVirtualMachines/ms-21.0.9/Contents/Home
 mvn clean package
 
@@ -54,7 +54,7 @@ mvn spring-boot:run
 
 ### 每个 lesson 是一个自包含的 package
 
-`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态。
+`src/main/java/com/example/demo/lessonNN_xxx/`，每课一个 `@RestController`，聚焦一个概念，互相不依赖。课程顺序即学习顺序：最简调用 → 提示词/结构化输出 → 流式 → 记忆 → 函数调用 → RAG → 图像 → Advisor → 持久化 → MCP → 多模态 → 健壮性 → 安全防护 → 可观测与成本 → 结构化输出修复。
 
 **贯穿全工程的模式**：各 Controller 都注入自动配置好的 `ChatClient.Builder`，再按本课需要定制后 `.build()` 出自己的 `ChatClient` 实例——
 
@@ -62,6 +62,7 @@ mvn spring-boot:run
 - lesson04：`builder.defaultAdvisors(MessageChatMemoryAdvisor...)`，挂记忆
 - lesson05：`builder.defaultTools(appTools)`，挂工具
 - lesson08/09/10：用 `ChatClient.builder(chatModel)` 静态工厂另开 Builder（见下）
+- lesson12：主 client 用注入的 ChatModel；备用/超时演示模型用 `OpenAiChatModel.builder().openAiClient(new OpenAIClientImpl(...))` 手工组装
 
 所以新增课程时，**不要去定义新的 `ChatClient` Bean**，而是照这个模式从注入的 Builder 派生。
 
@@ -98,6 +99,35 @@ mvn spring-boot:run
 - 客户端构建：`McpClient.sync(transport)...build()` → `McpSyncClient`，方法 `initialize()` / `listTools()` / `callTool(CallToolRequest)`；协议握手时版本协商结果（如 2025-11-25）以服务器回应为准。
 - 迷你服务器是**纯 Python 标准库**手写的 JSON-RPC（stdout 按行传协议、日志走 stderr），Lesson10McpTest 用 SDK 真实走协议往返，不联网不调模型。
 
+### lesson12 的健壮性（超时/重试/熔断/降级）
+
+**2.0 关键变化**：OpenAI 底层换成官方 openai-java SDK（openai-java-core 4.39.1，OkHttp），超时与重试内置于 SDK，配置入口是 `spring.ai.openai.timeout`（Duration，默认 60s）与 `spring.ai.openai.max-retries`（默认 3，只对 408/409/429/5xx 指数退避重试，且尊重响应头 `X-Should-Retry`/`Retry-After`）。**1.x 的 `spring.ai.retry.*`（SpringAiRetryAutoConfiguration 的 RetryTemplate）已不参与 OpenAI 模型**，别照旧博客配。
+
+手工组装另一个 ChatModel（降级/超时演示）的四件套：`SpringAiOpenAiHttpClient.builder().timeout(Duration).build()` → `new ClientOptions.Builder().httpClient(...).baseUrl(...).apiKey(...).timeout(...).maxRetries(...).build()` → `new OpenAIClientImpl(options)` → `OpenAiChatModel.builder().openAiClient(client).options(OpenAiChatOptions.builder().model(...).build()).build()`（ClientOptions.Builder 也有 `fromEnv()`，但读的是真实环境变量而非 .env 属性源）。
+
+手写熔断器 `SimpleCircuitBreaker`（CLOSED→OPEN→HALF_OPEN 状态机）只用于讲原理，生产用 Resilience4j。lesson12 的演示依赖假中转站的故障注入标记（RETRY-DEMO 前 2 次 429 / FAIL-DEMO 永远 500 / SLOW-DEMO 睡 3 秒，脚本在 /tmp/fake_relay.py，不在仓库里）。
+
+### lesson13 的安全防护
+
+Prompt 注入靶场（OWASP LLM01）：`SYSTEM_PROMPT` 里埋假口令金丝雀 `SPR-SEC-DEMO-77`（真实系统不存在，输出中出现 = 100% 泄露，探针思路同 lesson06 创始人）。四层纵深防御：① `/lesson13/vulnerable` 反面教材——系统提示与用户输入拼成一条 UserMessage，注入必成功；② `/lesson13/guarded`——SystemMessage/UserMessage 结构隔离 + `PromptInjectionGuardAdvisor`（关键词黑名单短路，挡不住变形攻击）+ 输出扫描；③ `SecretLeakGuard` 输出侧——**一个类同时实现 CallAdvisor（整段扫描）与 StreamAdvisor（滚动窗口逐 chunk 扫，金丝雀切在 chunk 边界也能命中，`takeUntil` 截断流）**；④ `/lesson13/tools`——工具最小权限，`MethodToolCallbackProvider.builder().toolObjects(obj).build().getToolCallbacks()` 拿到全部 ToolCallback 后按 `getToolDefinition().name()` 白名单过滤再 `.toolCallbacks(...)`。
+
+两个必须知道的实现坑（都踩过）：`.formatted()` 优先级低于 `+`（`"a" + "b".formatted(x)` 只格式化第二个字面量，要把拼接整体加括号）；防护器自己的警告文案也不能包含金丝雀值，否则防护器就是泄露源。
+
+### lesson14 的可观测与成本
+
+三层观测体系：① `/lesson14/usage`——`ChatResponse.getMetadata().getUsage()` 拿真实 token 用量（prompt/completion/total 三项），`ModelPricing` 单价表换算成本（**金额用 BigDecimal 不用 double**；completion 单价是 prompt 的 3~4 倍）；② `/lesson14/metrics`——Spring AI 2.0 自带 `ModelUsageMetricsGenerator.generate(usage, context, meterRegistry)`（`org.springframework.ai.model.observation` 包），按 GenAI 语义约定注册 `gen_ai.client.token.usage` 计数器（tag `gen_ai.token.type` = input/output/total，常量在 `AiObservationMetricNames`/`AiTokenType`）；本工程没引 actuator（无全局 MeterRegistry Bean），Controller 自建 `SimpleMeterRegistry` 演示，生产用 actuator 自动接线 + Prometheus 导出；③ `/lesson14/budget`——`TokenBudgetAdvisor` 累计 `getTotalTokens()`，超限短路（请求不出网）；④ `/lesson14/cap`——`OpenAiChatOptions.builder().maxTokens(n)` 给 completion 封顶。
+
+三个实测确认的 API/事实：
+- **2.0 的 `ChatClientRequestSpec.options()` 接收的是 Builder 而非成品对象**：`.options(OpenAiChatOptions.builder().maxTokens(n))`，带 `.build()` 会编译失败（1.x 是传成品）。
+- `ModelPricing.of()` 这类 contains 模糊匹配模型名时**长名必须排在前面**："gpt-4o-mini" 也 contains "gpt-4o"，先查 4o 会把 mini 误判成 4o（贵 16 倍）——离线测试抓出来的。
+- openai-java SDK 发送 output 上限时用的 key 是 `max_completion_tokens`；假中转站两个 key 都处理（脚本在 /tmp/fake_relay.py，不在仓库里；usage 按文本长度模拟，≈4 字符/token、每条消息 +4）。
+
+### lesson15 的结构化输出修复
+
+`StructuredOutputRepairer` 三级修复管道（成本从低到高）：DIRECT 直接解析 → EXTRACT 本地抽取（截第一个 `{` 到最后一个 `}`，专治寒暄包裹，零成本）→ MODEL_REPAIR（坏输出 + 具体解析错误喂回模型）。全部失败返回 `Parsed.FAILED`（不抛异常），调用方自行降级。端点：`/lesson15/naive` 反面教材（裸 `.entity()` 遇坏输出直接 500）与 `/lesson15/repair`（返回带 strategy/attempts，修复可观测）。假中转站标记：CLEAN-JSON / CHATTY-JSON（寒暄包裹）/ TRUNC-JSON（截断）/ FENCE-JSON（围栏），修复轮分支（提示词含「修复」+「JSON」）**必须排在标记分支前**——修复提示词里会引用带标记的坏输出，否则修复轮永远失败。
+
+2.0 `BeanOutputConverter` 行为边界（探针程序实测）：**markdown 围栏已由内置 `MarkdownCodeBlockCleaner` 自动清理**（1.x 需手动剥，2.0 不再是问题）；寒暄包裹抛 `tools.jackson.core.exc.StreamReadException`、截断抛 `UnexpectedEndOfInputException`、字段类型错抛 `tools.jackson.databind.exc.InvalidFormatException`——全部继承 `tools.jackson.core.JacksonException`（unchecked，Jackson 3 换了 `tools.jackson` 包名），管道统一 catch 它。与 LangChain 的 `OutputFixingParser` 同思路，但多了本地抽取这一级。
+
 ### lesson11 的多模态
 
 三个独立端点：视觉问答（`UserMessage.builder().text(q).media(Media...)` 挂 `org.springframework.ai.content.Media`，TTS（`OpenAiAudioSpeechModel.call(text)` 直接返回 mp3 `byte[]`）、STT（`TranscriptionModel.call(new AudioTranscriptionPrompt(resource))`，`response.getResults().get(0).getOutput()` **直接返回 String**，没有 `.getText()`）。语音 Bean 由 openai starter 自动装配（`spring.ai.model.audio.speech/transcription` 默认 openai），配置在 `spring.ai.openai.audio.speech.{model,voice}` / `audio.transcription.model`。
@@ -121,7 +151,7 @@ mvn spring-boot:run
 
 另一个实测结论：Spring AI 2.0 底层的 OpenAI 官方 SDK 请求路径 = `base-url` + `/chat/completions`，**不会自动补 `/v1`**，所以 `base-url` 默认值是 `https://api.openai.com/v1`（带 `/v1`）。中转站同理。另外 SDK 对连接级失败（域名不存在）不抛异常，表现为接口返回空 body 的 200。
 
-**测试必须全部离线。** 现有 10 个测试类共 24 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
+**测试必须全部离线。** 现有 14 个测试类共 60 个用例（`ConfigBindingTest`、`PromptTemplateTest`、`BeanOutputConverterTest`、`MemoryWindowTest`、`RagChunkingTest`、`DotEnvEnvironmentPostProcessorTest`、`AdvisorTest`、`Lesson09PersistenceTest`、`Lesson10McpTest`、`Lesson11MultimodalTest`、`Lesson12RobustnessTest`、`Lesson13SecurityTest`、`Lesson14ObservabilityTest`、`Lesson15StructuredOutputTest`）都不联网、不需要 API Key（`Lesson10McpTest` 会拉起 python3 子进程走真实 MCP 协议），覆盖模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返（JDBC 测试用 H2 内存库自建表，向量化用 Mockito 固定向量）、MCP 握手/工具发现/工具调用、多模态消息组装、成本估算/内置指标/预算防护、解析失败探针/三级修复管道。新增测试请保持这个性质——没有 Key 的人也要能 `mvn test` 全绿。
 
 **注释用中文，并标注对应的 LangChain 概念。** 这个工程的目标读者是从 Python LangChain 转过来的人（注意：LangChain 是 Python 生态的，Java 没有官方对应物，本工程教的就是 Spring AI 本身）。
 
@@ -141,7 +171,11 @@ mvn spring-boot:run
 | `AudioTranscription...getOutput().getText()` | `getOutput()` **直接返回 String**，无 getText() |
 | `OpenAiAudioApi.TranscriptionModel.WHISPER_1` | 2.0 已删除该枚举；`new AudioTranscriptionPrompt(resource)` 不传 options |
 | `new StdioClientTransport(params)` | 2.0 SDK 需两参：`(params, new JacksonMcpJsonMapperSupplier().get())` |
+| `spring.ai.retry.*` 配置 OpenAI 重试 | 2.0 无效；用 `spring.ai.openai.max-retries`/`timeout`（官方 SDK 内置） |
+| 1.x 那样配 RestClient 超时 | 2.0 底层是 OkHttp（openai-java），`SpringAiOpenAiHttpClient` + `ClientOptions` |
 | `McpClient.sync(transport).build()` 后直接用 | 需先 `initialize()` 再 `listTools()`/`callTool(...)` |
+| `ChatClient...options(OpenAiChatOptions)` 传成品对象 | 2.0 传 **Builder**：`.options(OpenAiChatOptions.builder().maxTokens(n))` |
+| JSON 解析异常 catch `com.fasterxml...JsonProcessingException` | Jackson 3 换包为 `tools.jackson`，统一 catch `tools.jackson.core.JacksonException`（unchecked） |
 
 ## 第 6 课的验证技巧
 

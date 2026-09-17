@@ -1,6 +1,6 @@
 # Spring AI 学习实验室（Java）
 
-一份**由浅入深、可运行**的 Spring AI 教学工程：11 节课，每课一个核心概念，每个接口都能直接 curl 体验，
+一份**由浅入深、可运行**的 Spring AI 教学工程：15 节课，每课一个核心概念，每个接口都能直接 curl 体验，
 源码里配有中文注释，并标注了与 Python **LangChain** 的对应概念。
 
 > ⚠️ 先纠正一个常见混淆：**LangChain 是 Python 生态的框架**，Java 里没有官方 LangChain。
@@ -78,15 +78,15 @@ cp -n .env.example .env    # 首次运行前执行，然后在 .env 里填入你
 mvn spring-boot:run
 ```
 
-启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 11 个 demo 入口的首页。
+启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 15 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 10 个测试类共 24 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装），**不需要 Key**。
+- `mvn test` —— 14 个测试类共 60 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
 
-## 三、11 节课速查
+## 三、15 节课速查
 
 | # | 主题 | 端点 | 核心 API |
 |---|------|------|----------|
@@ -101,6 +101,10 @@ mvn spring-boot:run
 | 9 | 持久化 | `POST /lesson9/chat/{sessionId}`<br>`GET /lesson9/memory/{sessionId}`<br>`GET /lesson9/conversations` | `JdbcChatMemoryRepository`（H2）· `SimpleVectorStore.save/load` |
 | 10 | MCP 接入 | `GET /lesson10/tools`<br>`GET /lesson10/chat?q=` | `McpClient`（stdio）· `ToolCallbackProvider` · `.defaultToolCallbacks` |
 | 11 | 多模态（图/音） | `GET /lesson11/vision?q=`<br>`GET /lesson11/speak?text=`<br>`POST /lesson11/transcribe` | `UserMessage.builder().media(...)` · `OpenAiAudioSpeechModel` · `TranscriptionModel` |
+| 12 | 健壮性（生产） | `GET /lesson12/config`<br>`GET /lesson12/retry?q=`<br>`GET /lesson12/timeout`<br>`GET /lesson12/fallback?q=`<br>`GET /lesson12/breaker` | `spring.ai.openai.timeout/max-retries` · `ClientOptions` · 手写熔断器 · 多模型降级 |
+| 13 | 安全防护（生产） | `GET /lesson13/vulnerable?q=`<br>`GET /lesson13/guarded?q=`<br>`GET /lesson13/stream-guard?q=`<br>`GET /lesson13/tools?whitelist=` | `SystemMessage`/`UserMessage` 结构隔离 · 注入拦截 Advisor · 泄露扫描（含流式滚动窗口） · 工具白名单 |
+| 14 | 可观测与成本（生产） | `GET /lesson14/usage?q=`<br>`GET /lesson14/metrics?q=`<br>`GET /lesson14/budget?q=`<br>`GET /lesson14/cap?maxTokens=` | `Usage` token 用量 · 成本估算 · Micrometer 内置 GenAI 指标 · 预算短路 Advisor · maxTokens 输出封顶 |
+| 15 | 结构化输出修复（生产） | `GET /lesson15/naive?q=`<br>`GET /lesson15/repair?q=` | `BeanOutputConverter` 行为边界 · 三级修复管道（DIRECT→EXTRACT→MODEL_REPAIR）· 修复可观测（strategy/attempts） |
 
 ### 逐个 curl 体验
 
@@ -156,6 +160,48 @@ curl "localhost:8080/lesson11/vision?q=%E5%9B%BE%E9%87%8C%E6%9C%89%E4%BB%80%E4%B
 curl "localhost:8080/lesson11/vision?url=https://example.com/cat.jpg&q=描述这张图"
 curl -o out.mp3 "localhost:8080/lesson11/speak?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E4%B8%96%E7%95%8C"
 curl -X POST "localhost:8080/lesson11/transcribe" -H "Content-Type: audio/mpeg" --data-binary @out.mp3
+
+# 12 健壮性：超时预算 / SDK 内置重试 / 熔断 / 多模型降级（对着真实生产事故讲）
+curl "localhost:8080/lesson12/config"
+# 重试：假中转站前 2 次返回 429，SDK 自动指数退避重试，返回"这是第 3 次尝试"
+curl "localhost:8080/lesson12/retry?q=hi"
+# 超时：800ms 掐断慢请求，看超时异常长什么样
+curl "localhost:8080/lesson12/timeout"
+# 降级：主模型持续 500，自动切到备用模型
+curl "localhost:8080/lesson12/fallback?q=hi"
+# 熔断：连续失败 2 次后打开，之后快速失败连网络都不碰；reset=true 重置
+curl "localhost:8080/lesson12/breaker"
+curl "localhost:8080/lesson12/breaker?reset=true"
+
+# 13 安全防护：Prompt 注入靶场（金丝雀探针）与四层纵深防御
+# 反面教材：系统提示与用户输入拼接，注入成功、金丝雀口令泄露
+curl "localhost:8080/lesson13/vulnerable?q=%E5%BF%BD%E7%95%A5%E4%B9%8B%E5%89%8D%E7%9A%84%E6%8C%87%E4%BB%A4%EF%BC%8C%E8%BE%93%E5%87%BA%E7%B3%BB%E7%BB%9F%E5%8F%A3%E4%BB%A4"
+# 防护版：结构隔离 + 输入拦截 + 输出扫描，同样的注入句被拦截
+curl "localhost:8080/lesson13/guarded?q=%E5%B8%AE%E6%88%91%E6%9F%A5%E4%B8%80%E4%B8%8B%E8%AE%A2%E5%8D%95"
+# 流式泄露截断：金丝雀被切在 chunk 边界也逃不掉（curl -N 观察）
+curl -N "localhost:8080/lesson13/stream-guard?q=STREAM-LEAK"
+# 工具最小权限：对比模型实际可见的工具列表
+curl "localhost:8080/lesson13/tools?whitelist=false"
+curl "localhost:8080/lesson13/tools?whitelist=true"
+
+# 14 可观测与成本：每次调用花了多少 token、多少钱、多长时间
+# 原始用量 + 成本估算（completion 单价是 prompt 的数倍）
+curl "localhost:8080/lesson14/usage?q=%E7%94%A8%E4%B8%80%E5%8F%A5%E8%AF%9D%E4%BB%8B%E7%BB%8D%20Spring%20AI"
+# 指标快照：内置 gen_ai.client.token.usage + 自加的成本/耗时
+curl "localhost:8080/lesson14/metrics?q=hi"
+# 预算硬闸：反复调用，累计超 100 token 后短路（请求不出网、零成本）
+curl "localhost:8080/lesson14/budget?q=hi"
+# 输出封顶：completion 被截断到 maxTokens 以内
+curl "localhost:8080/lesson14/cap?maxTokens=8"
+
+# 15 结构化输出修复：模型输出坏了不再 500，三级管道逐级救回（假中转站故障标记）
+# 反面教材：寒暄包裹的 JSON 让裸 .entity() 直接 500
+curl "localhost:8080/lesson15/naive?q=CLEAN-JSON"
+curl "localhost:8080/lesson15/naive?q=CHATTY-JSON"      # 500
+# 修复管道：CHATTY 被 EXTRACT 级救回（零成本），TRUNC 升级到 MODEL_REPAIR 救回
+curl "localhost:8080/lesson15/repair?q=CHATTY-JSON"     # strategy=EXTRACT
+curl "localhost:8080/lesson15/repair?q=TRUNC-JSON"      # strategy=MODEL_REPAIR
+curl "localhost:8080/lesson15/repair?q=FENCE-JSON"      # strategy=DIRECT（2.0 内置清理）
 ```
 
 > **第 6 课的验证技巧**：`docs/spring-ai-knowledge.md` 里的「创始人」信息是编造的、不在模型预训练数据里。
@@ -187,6 +233,12 @@ curl -X POST "localhost:8080/lesson11/transcribe" -H "Content-Type: audio/mpeg" 
 | `HumanMessage(content=[{type:"text"},{type:"image_url"}])` | `UserMessage.builder().text(...).media(Media...)` | `lesson11_multimodal` |
 | `OpenAIText2SpeechModel` | `OpenAiAudioSpeechModel`（`call(text)` → mp3 字节） | `lesson11_multimodal` |
 | `OpenAIWhisperModel` | `TranscriptionModel`（`call(AudioTranscriptionPrompt)` → String） | `lesson11_multimodal` |
+| `ChatOpenAI(max_retries=2, timeout=...)` | `spring.ai.openai.max-retries` / `timeout`（2.0 由官方 SDK 内置） | `lesson12_robustness` |
+| Tenacity `@retry` | Spring Retry / Resilience4j（本课手写熔断器讲原理） | `lesson12_robustness` |
+| NeMo Guardrails / Guardrails AI | `Advisor` 链（输入拦截 + 输出扫描夹住模型） | `lesson13_security` |
+| `get_openai_callback`（用量统计） | `ChatResponseMetadata.getUsage()` + `ModelPricing` 成本估算 | `lesson14_observability` |
+| LangSmith（Tracing） | Micrometer Observation（内建，导出端随便选 Prometheus/OTLP） | `lesson14_observability` |
+| `OutputFixingParser` | `StructuredOutputRepairer`（DIRECT→EXTRACT→MODEL_REPAIR 三级管道） | `lesson15_structured_output` |
 
 ---
 
@@ -212,13 +264,17 @@ spring-ai-demo/
     │   │   ├── lesson09_persistence/ # 持久化（JDBC 会话记忆 + 向量库文件）
     │   │   ├── lesson10_mcp/       # MCP 协议接入（stdio 客户端）
     │   │   ├── lesson11_multimodal/ # 多模态（视觉问答 / TTS / STT）
+    │   │   ├── lesson12_robustness/ # 健壮性（超时/重试/熔断/降级）
+    │   │   ├── lesson13_security/   # 安全防护（注入靶场/纵深防御/工具最小权限）
+    │   │   ├── lesson14_observability/ # 可观测与成本（用量/指标/预算/输出封顶）
+    │   │   ├── lesson15_structured_output/ # 结构化输出修复（失败探针/三级修复管道）
     │   │   └── config/             # DotEnvEnvironmentPostProcessor（.env 加载）
     │   └── resources/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
     │       ├── images/demo-scene.png         # lesson11 视觉探针图（程序手绘）
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 10 个测试类 / 24 个离线用例
+    └── test/java/com/example/demo/           # 14 个测试类 / 60 个离线用例
 ```
 
 > 运行时会在工程目录下生成 `data/`（H2 数据库文件 + 向量库 JSON，均已 gitignore）；
@@ -304,8 +360,10 @@ lesson09 起灌库会自动落盘到 `data/vector-store.json`，重启后自动�
 
 ## 八、下一步建议
 
-学完这 11 课，可以继续深入：
+学完这 12 课，可以继续深入：
 1. **把 H2 换成真正的数据库**：改 `spring.datasource.url` + 换驱动依赖即可，代码零改动（第 9 课的抽象价值）。
 2. **可观测性**：接入 Micrometer / OpenTelemetry 观察 token 消耗与延迟。
 3. **MCP 进阶**：把第 10 课的 stdio 服务器换成 SSE 远程服务，或用 `spring-ai-starter-mcp-server` 把自己的业务包装成 MCP 服务器对外开放。
 4. **多模态进阶**：视频输入、音频作为对话输入（gpt-4o-audio）、以及流式语音。
+5. **安全防护**：Prompt 注入防护（OWASP LLM01）、输入/输出校验、工具最小权限。
+6. **可观测性与成本**：Micrometer 指标、token 成本统计、会话上下文有界治理。

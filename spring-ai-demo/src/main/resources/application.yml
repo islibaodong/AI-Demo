@@ -61,6 +61,13 @@ spring:
       base-url: "${OPENAI_BASE_URL:https://api.openai.com/v1}"
       api-key: "${OPENAI_API_KEY:}"
 
+      # ---- 健壮性（lesson12）：底层 openai-java SDK（OkHttp）的超时与内置重试 ----
+      # 2.0 起这两项由官方 SDK 内部实现，1.x 的 spring.ai.retry.* 已不参与 OpenAI 模型。
+      # 超时预算原则：网关超时 > 这里的请求超时 > 连接超时，逐层收紧、全部显式配置。
+      # max-retries 只对瞬态错误生效（408/409/429/5xx），指数退避，绝不重试业务 4xx。
+      timeout: "${OPENAI_TIMEOUT:60s}"      # 请求总超时（Duration），SDK 默认 60s
+      max-retries: 2                        # SDK 内置重试次数，SDK 默认 3（演示降级时更快失败）
+
       # ---- 聊天模型 ----
       chat:
         # gpt-4o 是最常用、性价比最高的多模态模型
