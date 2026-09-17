@@ -18,7 +18,7 @@
 </head>
 <body>
     <h1>🌱 Spring AI 学习实验室</h1>
-    <p>由浅入深的 15 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
+    <p>由浅入深的 19 节课，每课一个核心概念。把 <code>OPENAI_API_KEY</code> 设好后，直接点下面链接或用 curl 体验。
     每个入口的源代码都配有中文注释，并标注了对应 LangChain 概念。</p>
 
     <div class="card">
@@ -166,6 +166,57 @@ curl "localhost:8080/lesson14/cap?maxTokens=8"                  # 输出被截�
 curl "localhost:8080/lesson15/repair?q=CHATTY-JSON"  # strategy=EXTRACT
 curl "localhost:8080/lesson15/repair?q=TRUNC-JSON"   # strategy=MODEL_REPAIR
 curl "localhost:8080/lesson15/repair?q=FENCE-JSON"   # strategy=DIRECT</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson16/auto?q=订单 A1001 有质量问题要退款</div>
+        <div class="path">GET /lesson16/agent?q=订单 A1001 有质量问题要退款</div>
+        <div class="path">GET /lesson16/agent?q=订单 A1001 有质量问题要退款&maxToolCalls=3</div>
+        <div class="badge">第 16 课</div>
+        <div class="desc">多步 Agent 编排（业务实战）—— 售后工单场景：查订单→核政策→退款→建工单→通知，模型自主串起 5 个工具。auto 端点是框架内置循环（黑盒，只看到最终答案）；agent 端点每个工具都包了治理装饰器：审计轨迹、跨工具调用预算（超限用"引导收尾"话术而非异常）、高危审批门（applyRefund 被拦截后模型自主改道 createTicket）。</div>
+        <pre>curl "localhost:8080/lesson16/auto?q=%E8%AE%A2%E5%8D%95%20A1001%20%E6%9C%89%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E8%A6%81%E9%80%80%E6%AC%BE"   # 内置循环：只见最终答案
+curl "localhost:8080/lesson16/agent?q=%E8%AE%A2%E5%8D%95%20A1001%20%E6%9C%89%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E8%A6%81%E9%80%80%E6%AC%BE"  # 完整轨迹：含拦截与改道
+curl "localhost:8080/lesson16/agent?q=hi&maxToolCalls=3"  # 预算耗尽被引导收尾</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson17/ingest（先灌库；?update=invoice 演示增量更新）</div>
+        <div class="path">GET /lesson17/search?q=退款多久到账</div>
+        <div class="path">GET /lesson17/ask?q=退款多久到账（试试知识库外的问题看拒答）</div>
+        <div class="badge">第 17 课</div>
+        <div class="desc">RAG 业务进阶（业务实战）—— 从"能检索"到"检索得准、答得可信、库能更新"。混合检索 = 向量路 + 关键词 bigram 路 → RRF 融合（只看排名不看分数，两路分数不可比）；规则重排演示精排位置（生产换 cross-encoder）；增量灌库按 docId 幂等跳过/替换；拒答阈值保证"检索不到就别让模型编"；回答附带引用溯源（source/chunk/分数）。用假中转站时 embedding 是常量向量，vectorOnly 会退化成按插入序——正好演示混合检索为什么是刚需。</div>
+        <pre>curl "localhost:8080/lesson17/ingest"              # 首次全量，重复调用幂等跳过
+curl "localhost:8080/lesson17/ingest?update=invoice" # 只替换 invoice → v2
+curl "localhost:8080/lesson17/search?q=%E9%80%80%E6%AC%BE%E5%A4%9A%E4%B9%85%E5%88%B0%E8%B4%A6"  # 三路对比
+curl "localhost:8080/lesson17/ask?q=%E4%BD%A0%E4%BB%AC%E8%80%81%E6%9D%BF%E6%98%AF%E8%B0%81"      # refused=true</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson18/evals</div>
+        <div class="path">GET /lesson18/judge?q=退款多久到账&answer=...&reference=...</div>
+        <div class="badge">第 18 课</div>
+        <div class="desc">评估与回归（业务实战）—— 把"系统行为对不对"从肉眼验收变成自动跑批。内置探针集（复用前几课的验证技巧）：RAG 创始人探针、注入不泄露金丝雀、冒烟非空——批量灌进被测系统（带注入防护的对话入口），返回通过率 + 失败明细（失败断言带输出片段）；单条失败不中断、异常也算失败。LLM-as-Judge 端点处理开放性回答：按参考答案打 1-5 分，score>=4 通过。</div>
+        <pre>curl "localhost:8080/lesson18/evals"   # 4/4 全绿；改坏防护后这里会掉到 3/4
+curl -G "localhost:8080/lesson18/judge" --data-urlencode "q=退款多久到账" \
+     --data-urlencode "answer=很快哦" --data-urlencode "reference=3-5 个工作日到账"   # score=1</pre>
+    </div>
+
+    <div class="card">
+        <div class="path">GET /lesson19/setup（先灌库，幂等）</div>
+        <div class="path">GET /lesson19/support?session=s1&q=订单 A1001 有质量问题要退款</div>
+        <div class="path">GET /lesson19/support/stream?q=退款多久到账（SSE）</div>
+        <div class="path">GET /lesson19/summary?session=s1</div>
+        <div class="path">GET /lesson19/evals</div>
+        <div class="badge">第 19 课 · 结课 Capstone</div>
+        <div class="desc">mini 智能客服系统 —— 前 18 课能力整链组装：注入防护/敏感词打码/预算 Advisor 在输入侧，混合检索+拒答保回答有据，售后工具挂治理装饰器（审计/预算/审批门），输出侧泄露扫描（流式自动生效），会话结束出结构化工单（三级修复兜底），最后 4 条探针回归整条链路。响应里带 token 用量与估算成本。注意：2.0.0 流式端点不能挂记忆 Advisor（聚合后读不到会话 id 必炸），stream 用的是无记忆的专用 client。</div>
+        <pre>curl "localhost:8080/lesson19/setup"
+curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
+     --data-urlencode "q=%E8%AE%A2%E5%8D%95%20A1001%20%E6%9C%89%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E8%A6%81%E9%80%80%E6%AC%BE"   # 工具链+审计+引用
+curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
+     --data-urlencode "q=%E4%BD%A0%E4%BB%AC%E8%80%81%E6%9D%BF%E6%98%AF%E8%B0%81"          # refused=true 拒答
+curl -N "localhost:8080/lesson19/support/stream?q=%E9%80%80%E6%AC%BE%E5%A4%9A%E4%B9%85%E5%88%B0%E8%B4%A6"  # SSE
+curl "localhost:8080/lesson19/summary?session=s1"   # 工单 JSON
+curl "localhost:8080/lesson19/evals"                # 4/4 回归</pre>
     </div>
 
     <p style="color:#888; margin-top:30px;">想一个人都不设 key 检验构建：在工程目录 <code>mvn test</code> 即可（单元测试不联网）。</p>

@@ -1,6 +1,6 @@
 # Spring AI 学习实验室（Java）
 
-一份**由浅入深、可运行**的 Spring AI 教学工程：15 节课，每课一个核心概念，每个接口都能直接 curl 体验，
+一份**由浅入深、可运行**的 Spring AI 教学工程：19 节课，每课一个核心概念，每个接口都能直接 curl 体验，
 源码里配有中文注释，并标注了与 Python **LangChain** 的对应概念。
 
 > ⚠️ 先纠正一个常见混淆：**LangChain 是 Python 生态的框架**，Java 里没有官方 LangChain。
@@ -78,15 +78,15 @@ cp -n .env.example .env    # 首次运行前执行，然后在 .env 里填入你
 mvn spring-boot:run
 ```
 
-启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 15 个 demo 入口的首页。
+启动后浏览器打开 **<http://localhost:8080/>**，有一个列出全部 18 个 demo 入口的首页。
 
 ### 没有 Key 也能做的两件事
-- `mvn test` —— 14 个测试类共 60 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道），**不需要 Key**。
+- `mvn test` —— 18 个测试类共 86 个用例，全部离线运行（模板渲染、JSON 解析、记忆窗口裁剪、RAG 切块、配置项绑定、`.env` 加载、Advisor 行为、JDBC/向量库持久化往返、MCP 协议握手/发现/调用、多模态消息组装、熔断器状态机/降级模板、注入拦截/泄露扫描/工具白名单、成本估算/内置指标/预算防护、解析失败探针/修复管道/治理装饰器、混合检索/重排/增量灌库/拒答、评估跑批/LLM 裁判、Capstone 整链集成），**不需要 Key**。
 - 启动应用后打开首页 —— 页面能正常显示；但一旦真的调用模型（如 `/lesson1`），会返回 500。
 
 ---
 
-## 三、15 节课速查
+## 三、19 节课速查
 
 | # | 主题 | 端点 | 核心 API |
 |---|------|------|----------|
@@ -105,6 +105,10 @@ mvn spring-boot:run
 | 13 | 安全防护（生产） | `GET /lesson13/vulnerable?q=`<br>`GET /lesson13/guarded?q=`<br>`GET /lesson13/stream-guard?q=`<br>`GET /lesson13/tools?whitelist=` | `SystemMessage`/`UserMessage` 结构隔离 · 注入拦截 Advisor · 泄露扫描（含流式滚动窗口） · 工具白名单 |
 | 14 | 可观测与成本（生产） | `GET /lesson14/usage?q=`<br>`GET /lesson14/metrics?q=`<br>`GET /lesson14/budget?q=`<br>`GET /lesson14/cap?maxTokens=` | `Usage` token 用量 · 成本估算 · Micrometer 内置 GenAI 指标 · 预算短路 Advisor · maxTokens 输出封顶 |
 | 15 | 结构化输出修复（生产） | `GET /lesson15/naive?q=`<br>`GET /lesson15/repair?q=` | `BeanOutputConverter` 行为边界 · 三级修复管道（DIRECT→EXTRACT→MODEL_REPAIR）· 修复可观测（strategy/attempts） |
+| 16 | 多步 Agent 编排（业务） | `GET /lesson16/auto?q=`<br>`GET /lesson16/agent?q=&maxToolCalls=&approvals=` | 内置工具循环 · `AgentGovernor` 治理装饰器（审计轨迹/工具调用预算/高危审批门）· 售后工单场景 |
+| 17 | RAG 业务进阶（业务） | `GET /lesson17/ingest[?update=invoice]`<br>`GET /lesson17/search?q=`<br>`GET /lesson17/ask?q=&threshold=` | 混合检索（向量+关键词→RRF）· 规则重排 · 增量灌库（docId 幂等/替换）· 拒答阈值 · 引用溯源 |
+| 18 | 评估与回归（业务） | `GET /lesson18/evals`<br>`GET /lesson18/judge?q=&answer=&reference=` | `EvalRunner` 探针跑批（通过率+失败明细）· 规则断言（Contains/NotContains/NonBlank）· LLM-as-Judge（1-5 分） |
+| 19 | 结课 Capstone（业务） | `GET /lesson19/setup`<br>`GET /lesson19/support?session=&q=`<br>`GET /lesson19/support/stream`<br>`GET /lesson19/summary?session=`<br>`GET /lesson19/evals` | 前 18 课整链组装：注入防护/敏感词打码/预算 Advisor + 记忆 + 混合检索拒答 + 治理工具链 + 泄露扫描 + 流式 + 三级修复摘要 + 探针回归（含用量与成本） |
 
 ### 逐个 curl 体验
 
@@ -202,6 +206,41 @@ curl "localhost:8080/lesson15/naive?q=CHATTY-JSON"      # 500
 curl "localhost:8080/lesson15/repair?q=CHATTY-JSON"     # strategy=EXTRACT
 curl "localhost:8080/lesson15/repair?q=TRUNC-JSON"      # strategy=MODEL_REPAIR
 curl "localhost:8080/lesson15/repair?q=FENCE-JSON"      # strategy=DIRECT（2.0 内置清理）
+
+# 16 多步 Agent 编排：售后工单自动处理（查订单→核政策→退款→建工单→通知）
+# 框架内置循环：一行 toolCallbacks，只看到最终答案（黑盒、无步数上限）
+curl "localhost:8080/lesson16/auto?q=%E8%AE%A2%E5%8D%95%20A1001%20%E6%9C%89%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E8%A6%81%E9%80%80%E6%AC%BE"
+# 治理版：完整工具轨迹（注意 applyRefund 被[拦截]后模型自主改道 createTicket）
+curl "localhost:8080/lesson16/agent?q=%E8%AE%A2%E5%8D%95%20A1001%20%E6%9C%89%E8%B4%A8%E9%87%8F%E9%97%AE%E9%A2%98%E8%A6%81%E9%80%80%E6%AC%BE"
+# 工具调用预算：maxToolCalls=3 时 notifyUser 被预算拦下，模型收到"引导收尾"话术
+curl "localhost:8080/lesson16/agent?q=hi&maxToolCalls=3"
+
+# 17 RAG 业务进阶：混合检索 / 重排 / 增量灌库 / 拒答 / 引用溯源
+# 增量灌库：重复调用幂等跳过；?update=invoice 把发票文档替换成 v2（只重灌这一篇）
+curl "localhost:8080/lesson17/ingest"
+curl "localhost:8080/lesson17/ingest?update=invoice"
+# 三路检索对比：vectorOnly / keywordOnly / hybrid（带 RRF 分、两路排名、精排分）
+curl "localhost:8080/lesson17/search?q=%E9%80%80%E6%AC%BE%E5%A4%9A%E4%B9%85%E5%88%B0%E8%B4%A6"
+# 业务问答：带引用溯源；知识库外的问题直接拒答（不调模型）
+curl "localhost:8080/lesson17/ask?q=%E9%80%80%E6%AC%BE%E5%A4%9A%E4%B9%85%E5%88%B0%E8%B4%A6"
+curl "localhost:8080/lesson17/ask?q=%E4%BD%A0%E4%BB%AC%E8%80%81%E6%9D%BF%E6%98%AF%E8%B0%81"   # refused=true
+
+# 18 评估与回归：把"系统行为对不对"变成可自动执行的探针跑批
+# 规则断言评估集：RAG 创始人探针 / 注入不泄露金丝雀 / 冒烟，返回通过率+失败明细
+curl "localhost:8080/lesson18/evals"
+# LLM-as-Judge：开放性回答按参考答案打 1-5 分（score>=4 算通过）
+curl -G "localhost:8080/lesson18/judge" --data-urlencode "q=退款多久到账" \
+     --data-urlencode "answer=退款 3-5 个工作日原路退回" --data-urlencode "reference=退款原路退回，3-5 个工作日到账"
+
+# 19 结课 Capstone：mini 智能客服系统 —— 前 18 课能力整链组装
+curl "localhost:8080/lesson19/setup"                       # 先灌 FAQ 知识库（幂等）
+curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
+     --data-urlencode "q=订单 A1001 有质量问题要退款"        # 工具链+引用+审计+用量成本
+curl -G "localhost:8080/lesson19/support" --data-urlencode "session=s1" \
+     --data-urlencode "q=你们老板是谁"                       # 拒答：检索不到不调模型
+curl -N -G "localhost:8080/lesson19/support/stream" --data-urlencode "q=退款多久到账"  # SSE 流式
+curl "localhost:8080/lesson19/summary?session=s1"          # 会话历史 → 工单 JSON（三级修复）
+curl "localhost:8080/lesson19/evals"                       # 结课回归：4 条探针跑批
 ```
 
 > **第 6 课的验证技巧**：`docs/spring-ai-knowledge.md` 里的「创始人」信息是编造的、不在模型预训练数据里。
@@ -239,6 +278,12 @@ curl "localhost:8080/lesson15/repair?q=FENCE-JSON"      # strategy=DIRECT（2.0 
 | `get_openai_callback`（用量统计） | `ChatResponseMetadata.getUsage()` + `ModelPricing` 成本估算 | `lesson14_observability` |
 | LangSmith（Tracing） | Micrometer Observation（内建，导出端随便选 Prometheus/OTLP） | `lesson14_observability` |
 | `OutputFixingParser` | `StructuredOutputRepairer`（DIRECT→EXTRACT→MODEL_REPAIR 三级管道） | `lesson15_structured_output` |
+| AgentExecutor / create_tool_agent | `.toolCallbacks(...)` 内置循环（模型→工具→模型自动循环） | `lesson16_agent` |
+| LangGraph human-in-the-loop 断点 | `AgentGovernor` 治理装饰器（审批门/预算/审计在工具执行层） | `lesson16_agent` |
+| EnsembleRetriever（BM25+向量） | `HybridRetriever`（KeywordScorer bigram 路 + VectorStore 路 → RRF 融合） | `lesson17_rag_advanced` |
+| ContextualCompressionRetriever + 重排 | `HybridRetriever.rerank`（规则版；生产换 bge-reranker 等 cross-encoder） | `lesson17_rag_advanced` |
+| LangSmith evaluate / string evaluator | `EvalRunner` 探针跑批 + `LlmJudge`（1-5 分裁判，score>=4 通过） | `lesson18_evals` |
+| LangGraph StateGraph（守卫→检索→Agent→输出守卫） | Capstone 整链：Advisor 链做横切关注点 + ChatClient 组装业务流 | `lesson19_capstone` |
 
 ---
 
@@ -268,13 +313,17 @@ spring-ai-demo/
     │   │   ├── lesson13_security/   # 安全防护（注入靶场/纵深防御/工具最小权限）
     │   │   ├── lesson14_observability/ # 可观测与成本（用量/指标/预算/输出封顶）
     │   │   ├── lesson15_structured_output/ # 结构化输出修复（失败探针/三级修复管道）
+    │   │   ├── lesson16_agent/      # 多步 Agent 编排（售后场景/治理装饰器）
+    │   │   ├── lesson17_rag_advanced/ # RAG 业务进阶（混合检索/重排/增量灌库/拒答/引用）
+    │   │   ├── lesson18_evals/      # 评估与回归（探针跑批/LLM 裁判）
+    │   │   ├── lesson19_capstone/  # 结课 Capstone（mini 智能客服系统，前 18 课整链组装）
     │   │   └── config/             # DotEnvEnvironmentPostProcessor（.env 加载）
     │   └── resources/
     │       ├── application.yml        # 所有配置集中在此
     │       ├── static/index.html             # demo 首页
     │       ├── images/demo-scene.png         # lesson11 视觉探针图（程序手绘）
     │       └── docs/spring-ai-knowledge.md   # RAG 演示知识库
-    └── test/java/com/example/demo/           # 14 个测试类 / 60 个离线用例
+    └── test/java/com/example/demo/           # 18 个测试类 / 86 个离线用例
 ```
 
 > 运行时会在工程目录下生成 `data/`（H2 数据库文件 + 向量库 JSON，均已 gitignore）；
